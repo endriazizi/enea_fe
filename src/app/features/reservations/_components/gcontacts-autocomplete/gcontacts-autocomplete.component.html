@@ -1,0 +1,45 @@
+<!-- src/app/features/reservations/_components/gcontacts-autocomplete/gcontacts-autocomplete.component.html -->
+
+<ion-searchbar
+  [placeholder]="placeholder"
+  [value]="query()"
+  (ionInput)="onInput($event)"
+  (ionClear)="onInput($event)"
+  showCancelButton="never"
+  inputmode="search"
+  enterkeyhint="search"
+  animated="true">
+</ion-searchbar>
+
+<!-- Lista risultati -->
+<ion-list *ngIf="showList()">
+  <!-- Spinner in testa se il parent sta cercando -->
+  <ion-item *ngIf="searching" lines="none">
+    <ion-spinner slot="start"></ion-spinner>
+    <ion-label>Ricerca in corso…</ion-label>
+  </ion-item>
+
+  <!-- Risultati -->
+  <ion-item
+    button
+    detail="false"
+    *ngFor="let c of results; trackBy: trackByIdx; let i = index"
+    (click)="onSelect(c)">
+    <ion-icon name="person-circle-outline" slot="start"></ion-icon>
+    <ion-label>
+      <div style="font-weight:600;">
+        {{ c.displayName || (c.givenName || '') + ' ' + (c.familyName || '') || '—' }}
+      </div>
+      <div style="font-size:12px; opacity:.8;">
+        <span *ngIf="c.phone">{{ c.phone }}</span>
+        <span *ngIf="c.phone && c.email"> &middot; </span>
+        <span *ngIf="c.email">{{ c.email }}</span>
+      </div>
+    </ion-label>
+  </ion-item>
+
+  <!-- Nessun risultato (ma query presente) -->
+  <ion-item *ngIf="!searching && results?.length === 0" lines="none">
+    <ion-label style="opacity:.75;">Nessun contatto trovato</ion-label>
+  </ion-item>
+</ion-list>

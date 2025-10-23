@@ -1,0 +1,20 @@
+<!-- Header titolo + riga "Oggi: ..." -->
+<ion-item lines="none">
+  <ion-label>
+    <div style="font-weight:600;">{{ title }}</div>
+    <div *ngIf="showTodayLine" style="font-size:12px; opacity:.75;">Oggi: {{ todayLabel() }}</div>
+  </ion-label>
+</ion-item>
+
+<!-- Segment giorni scrollabile -->
+<div style="padding: 0 8px 8px;">
+  <ion-segment [value]="selected || daysList()[0]?.iso" (ionChange)="onChange($event)" mode="md" scrollable="true">
+    <ion-segment-button *ngFor="let d of daysList()" [value]="d.iso">
+      <div style="display:flex;flex-direction:column;align-items:center;line-height:1;">
+        <small style="opacity:.8">{{ d.weekday }}</small>
+        <b style="font-size:18px;">{{ d.day }}</b>
+        <small style="opacity:.6">{{ d.month }}</small>
+      </div>
+    </ion-segment-button>
+  </ion-segment>
+</div>

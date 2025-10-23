@@ -1,0 +1,257 @@
+<!-- src/app/features/reservations/new-reservation.page.html -->
+<ion-header>
+  <ion-toolbar>
+    <ion-title>Nuova prenotazione</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <div style="max-width: 880px; margin: 0 auto; padding: 16px">
+    <form [formGroup]="form" (ngSubmit)="onSubmit()">
+      <!-- ===== Sezione 1: Dati cliente ===== -->
+
+      <!-- 🔎 Autocomplete Google Contacts (parent-driven) -->
+      <!-- Usa: gcResults(), gcSearching(), onGcQueryChange(), onContactSelected() nel TS -->
+      <app-gcontacts-autocomplete
+        [results]="gcResults()"
+        [searching]="gcSearching()"
+        (queryChange)="onGcQueryChange($event)"
+        (selected)="onContactSelected($event)">
+      </app-gcontacts-autocomplete>
+
+      <ion-list inset="true" style="margin-top: 8px">
+        <ion-item lines="full">
+          <ion-label position="stacked">
+            Cognome <span aria-hidden="true" style="color: #dc2626">*</span>
+          </ion-label>
+          <ion-input
+            formControlName="customer_last"
+            placeholder="Rossi"
+            autocapitalize="off"
+            autocomplete="family-name"
+            enterkeyhint="next"
+            clear-input="true"
+            style="text-transform: uppercase"
+            (ionInput)="forceUpper('customer_last', $event)">
+          </ion-input>
+        </ion-item>
+
+        <ion-item lines="full" style="margin-top: 8px">
+          <ion-label position="stacked">Nome</ion-label>
+          <ion-input
+            formControlName="customer_first"
+            placeholder="Mario"
+            autocapitalize="off"
+            autocomplete="family-name"
+            enterkeyhint="next"
+            clear-input="true"
+            style="text-transform: uppercase"
+            (ionInput)="forceUpper('customer_first', $event)">
+          </ion-input>
+        </ion-item>
+
+        <ion-item lines="full" style="margin-top: 8px">
+          <ion-label position="stacked">Telefono</ion-label>
+          <ion-input
+            formControlName="phone"
+            type="tel"
+            inputmode="tel"
+            autocomplete="tel-national"
+            placeholder="+39 333 123 4567"
+            enterkeyhint="next"
+            clear-input="true">
+          </ion-input>
+        </ion-item>
+
+        <ion-item lines="full" style="margin-top: 8px">
+          <ion-label position="stacked">Email</ion-label>
+          <ion-input
+            formControlName="email"
+            type="email"
+            autocomplete="email"
+            placeholder="mario@example.com"
+            enterkeyhint="next"
+            clear-input="true">
+          </ion-input>
+        </ion-item>
+
+        <ion-note
+          *ngIf="emailCtrl.invalid && (emailCtrl.dirty || emailCtrl.touched)"
+          color="danger"
+          style="margin: 6px 8px 0">
+          Email non valida
+        </ion-note>
+      </ion-list>
+
+      <!-- ===== Sezione 2: Coperti (stepper grande) ===== -->
+      <ion-list inset="true" style="margin-top: 12px">
+        <ion-item lines="full">
+          <ion-label>Coperti</ion-label>
+
+          <div style="display: flex; align-items: center; gap: 8px; margin-left: auto">
+            <ion-button size="large" fill="outline" (click)="decParty()" aria-label="Diminuisci coperti">
+              <ion-icon slot="icon-only" name="remove-circle"></ion-icon>
+            </ion-button>
+
+            <ion-input
+              formControlName="party_size"
+              type="number"
+              inputmode="numeric"
+              min="1"
+              style="text-align: center; width: 78px; font-size: 22px"
+              aria-live="polite"
+              readonly>
+            </ion-input>
+
+            <ion-button size="large" (click)="incParty()" aria-label="Aumenta coperti">
+              <ion-icon slot="icon-only" name="add-circle"></ion-icon>
+            </ion-button>
+          </div>
+        </ion-item>
+      </ion-list>
+
+      <!-- ===== Sezione 3: Data & Ora (bottoni rapidi) ===== -->
+      <ion-list inset="true" style="margin-top: 12px">
+        <!-- 🔁 Date quick scroller -->
+        <app-date-quick
+          [title]="'Data'"
+          [showTodayLine]="true"
+          [days]="7"
+          [selected]="selectedDateISO()"
+          (selectedChange)="onQuickDate($event)">
+        </app-date-quick>
+
+        <ion-item lines="none">
+          <ion-label>
+            <div style="font-weight: 600">Orario</div>
+            <div style="font-size: 12px; opacity: 0.75">Scegli un orario disponibile</div>
+          </ion-label>
+        </ion-item>
+
+        <!-- PRANZO -->
+        <div *ngIf="lunchSlots.length" style="padding: 0 12px 8px">
+          <div style="font-size: 12px; opacity: 0.7; margin: 4px 0">Pranzo</div>
+          <div style="display: flex; flex-wrap: wrap; gap: 10px">
+            <ion-button
+              *ngFor="let t of lunchSlots"
+              [fill]="selectedTime() === t ? 'solid' : 'outline'"
+              size="default"
+              [disabled]="isSlotDisabled(selectedDateISO(), t)"
+              (click)="onSelectTime(t)">
+              {{ t }}
+            </ion-button>
+          </div>
+        </div>
+
+        <!-- CENA -->
+        <div *ngIf="dinnerSlots.length" style="padding: 0 12px 12px">
+          <div style="font-size: 12px; opacity: 0.7; margin: 4px 0">Cena</div>
+          <div style="display: flex; flex-wrap: wrap; gap: 10px">
+            <ion-button
+              *ngFor="let t of dinnerSlots"
+              [fill]="selectedTime() === t ? 'solid' : 'outline'"
+              size="default"
+              [disabled]="isSlotDisabled(selectedDateISO(), t)"
+              (click)="onSelectTime(t)">
+              {{ t }}
+            </ion-button>
+          </div>
+        </div>
+
+        <!-- Stato selezione -->
+        <ion-note *ngIf="form.value.start_at" color="primary" style="display: block; margin: 8px 12px 0">
+          Selezionato: {{ selectedDateHuman() }}, {{ selectedTime() }}
+        </ion-note>
+
+        <!-- Fallback: calendario avanzato -->
+        <div style="padding: 8px 12px 12px">
+          <ion-button fill="clear" size="small" (click)="toggleAdvanced()">
+            {{ showAdvanced() ? 'Chiudi calendario' : 'Scegli da calendario' }}
+          </ion-button>
+          <div *ngIf="showAdvanced()">
+            <ion-datetime
+              [value]="advancedValue()"
+              (ionChange)="onAdvancedPick($event)"
+              presentation="date-time"
+              preferWheel="true">
+            </ion-datetime>
+          </div>
+        </div>
+
+        <ion-note
+          *ngIf="startCtrl.invalid && (startCtrl.dirty || startCtrl.touched)"
+          color="danger"
+          style="margin: 6px 12px 0">
+          Data/ora obbligatorie
+        </ion-note>
+      </ion-list>
+
+      <!-- ===== Sezione 4: Sala & Tavolo ===== -->
+      <ion-list inset="true" style="margin-top: 12px">
+        <ion-item lines="full">
+          <ion-label position="stacked">Sala</ion-label>
+          <ion-select formControlName="room_id" interface="popover" placeholder="Seleziona sala">
+            <ion-select-option *ngFor="let r of rooms()" [value]="r.id">
+              {{ r.name }}
+            </ion-select-option>
+          </ion-select>
+        </ion-item>
+
+        <ion-item lines="full" style="margin-top: 8px">
+          <ion-label position="stacked">Tavolo</ion-label>
+          <ion-select
+            formControlName="table_id"
+            interface="popover"
+            placeholder="Seleziona tavolo"
+            [disabled]="!form.value.room_id || !tables().length">
+            <ion-select-option *ngFor="let t of tables()" [value]="t.id">
+              Tavolo {{ t.table_number || t.label || t.id }} ({{ t.capacity || '?' }})
+            </ion-select-option>
+          </ion-select>
+        </ion-item>
+      </ion-list>
+
+      <!-- ===== Sezione 5: Note ===== -->
+      <ion-list inset="true" style="margin-top: 12px">
+        <ion-item lines="full">
+          <ion-label position="stacked">Note</ion-label>
+          <ion-textarea
+            formControlName="notes"
+            autoGrow="true"
+            enterkeyhint="done"
+            placeholder="Es. intolleranze, preferenza tavolo, segnalazioni…">
+          </ion-textarea>
+        </ion-item>
+      </ion-list>
+
+      <!-- CTA -->
+      <div style="padding: 12px 8px">
+        <ion-button expand="block" size="large" type="submit" [disabled]="loading() || form.invalid">
+          {{ loading() ? 'Creazione…' : 'Crea prenotazione' }}
+        </ion-button>
+      </div>
+    </form>
+  </div>
+
+  <!-- === FAB SPEED-DIAL (solo mobile) ====================================== -->
+  <ion-fab slot="fixed" horizontal="end" vertical="bottom" class="ion-hide-md-up fab-resv">
+    <!-- Pulsante principale: apre il menu -->
+    <ion-fab-button title="Azioni">
+      <ion-icon name="ellipsis-vertical"></ion-icon>
+    </ion-fab-button>
+
+    <!-- Menu verticale -->
+    <ion-fab-list side="top">
+      <!-- Vai alla lista -->
+      <ion-fab-button routerLink="/reservations" title="Vai alla lista">
+        <ion-icon name="list"></ion-icon>
+      </ion-fab-button>
+
+      <!-- Pulisci form -->
+      <ion-fab-button (click)="clearForm()" title="Pulisci form">
+        <ion-icon name="remove-circle"></ion-icon>
+      </ion-fab-button>
+    </ion-fab-list>
+  </ion-fab>
+  <!-- ====================================================================== -->
+</ion-content>

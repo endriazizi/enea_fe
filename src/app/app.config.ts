@@ -1,0 +1,76 @@
+import { ApplicationConfig, isDevMode, APP_INITIALIZER, LOCALE_ID } from '@angular/core';
+import { provideRouter, Routes } from '@angular/router';
+import { provideHttpClient, withInterceptors } from '@angular/common/http';
+import { provideIonicAngular } from '@ionic/angular/standalone';
+import { provideServiceWorker } from '@angular/service-worker';
+
+import { ShellPage } from './shell/shell.page';
+import { DiagnosticsPage } from './features/diagnostics/diagnostics.page';
+import { LoginPage } from './features/auth/login.page';
+
+import { API_URL } from './core/tokens';
+import { environment } from './environments/environment';
+import { apiErrorInterceptor } from './core/interceptors';
+import { authInterceptor } from './core/auth/auth.interceptor';
+import { authGuard } from './core/auth/auth.guard';
+import { AuthService } from './core/auth/auth.service';
+
+import { registerAppIcons } from './icons';
+registerAppIcons();
+
+const routes: Routes = [
+  { path: 'login', component: LoginPage },
+  { path: 'logout', loadComponent: () => import('./features/auth/logout.page').then(m => m.LogoutPage) },
+  {
+    path: '',
+    component: ShellPage,
+    children: [
+      { path: '', pathMatch: 'full', redirectTo: 'diagnostics' },
+      { path: 'diagnostics', component: DiagnosticsPage },
+      {
+        path: 'reservations',
+        children: [
+          {
+            path: '',
+            loadComponent: () => import('./features/reservations/reservations-list.page')
+              .then(m => m.ReservationsListPage),
+            canActivate: [authGuard],
+          },
+          {
+            path: 'new',
+            loadComponent: () => import('./features/reservations/new-reservation.page')
+              .then(m => m.NewReservationPage),
+            canActivate: [authGuard],
+          },
+          {
+            path: ':id/edit',
+            loadComponent: () => import('./features/reservations/edit-reservation.page')
+              .then(m => m.EditReservationPage),
+            canActivate: [authGuard],
+          }
+        ]
+      },
+      { path: '**', redirectTo: 'diagnostics' }
+    ]
+  }
+];
+
+export const appConfig: ApplicationConfig = {
+  providers: [
+    provideRouter(routes),
+    provideIonicAngular(),
+    { provide: LOCALE_ID, useValue: 'it-IT' },
+    provideHttpClient(withInterceptors([authInterceptor, apiErrorInterceptor])),
+    { provide: API_URL, useValue: environment.apiUrl },
+    {
+      provide: APP_INITIALIZER,
+      useFactory: (auth: AuthService) => () => auth.init(),
+      deps: [AuthService],
+      multi: true
+    },
+    provideServiceWorker('ngsw-worker.js', {
+      enabled: !isDevMode(),
+      registrationStrategy: 'registerWhenStable:30000'
+    })
+  ]
+};

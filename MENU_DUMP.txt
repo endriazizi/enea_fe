@@ -1,0 +1,1599 @@
+🧾 DUMP MENÙ FE ▶️ /c/Users/Endri Azizi/progetti-dev/PROVA/admin-pwa
+⏱  Tue, Oct 14, 2025 12:14:46 AM
+
+📦 package.json (deps rilevanti)
+{
+  "dependencies": {
+    "@angular/common": "^20.3.0",
+    "@angular/compiler": "^20.3.0",
+    "@angular/core": "^20.3.0",
+    "@angular/forms": "^20.3.0",
+    "@angular/platform-browser": "^20.3.0",
+    "@angular/router": "^20.3.0",
+    "@angular/service-worker": "20.3.4",
+    "@ionic/angular": "8.7.6",
+    "ionicons": "8.0.13",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.3.0",
+    "zone.js": "0.14.10"
+  },
+  "devDependencies": {
+    "@angular-devkit/build-angular": "20.3.5",
+    "@angular/build": "^20.3.5",
+    "@angular/cli": "20.3.5",
+    "@angular/compiler-cli": "^20.3.0",
+    "@types/jasmine": "~5.1.0",
+    "jasmine-core": "~5.9.0",
+    "karma": "~6.4.0",
+    "karma-chrome-launcher": "~3.2.0",
+    "karma-coverage": "~2.2.0",
+    "karma-jasmine": "~5.1.0",
+    "karma-jasmine-html-reporter": "~2.1.0",
+    "typescript": "~5.9.2"
+  }
+}
+
+────────────────────────────────────────────────────────
+📄 FILE: angular.json
+────────────────────────────────────────────────────────
+{
+  "$schema": "./node_modules/@angular/cli/lib/config/schema.json",
+  "version": 1,
+  "newProjectRoot": "projects",
+  "projects": {
+    "admin-pwa": {
+      "projectType": "application",
+      "schematics": {
+        "@schematics/angular:component": {
+          "style": "scss",
+          "standalone": true
+        }
+      },
+      "root": "",
+      "sourceRoot": "src",
+      "prefix": "app",
+      "architect": {
+        "build": {
+          "builder": "@angular/build:application",
+          "options": {
+            "index": "src/index.html",
+            "browser": "src/main.ts",
+            "polyfills": ["zone.js"],
+            "tsConfig": "tsconfig.app.json",
+            "inlineStyleLanguage": "scss",
+            "assets": [
+              {
+                "glob": "**/*",
+                "input": "public",
+                "output": "/"
+              }
+            ],
+            "styles": [
+              "src/styles.scss"
+            ]
+          },
+          "configurations": {
+            "production": {
+              "budgets": [
+                { "type": "initial", "maximumWarning": "500kB", "maximumError": "1MB" },
+                { "type": "anyComponentStyle", "maximumWarning": "4kB", "maximumError": "8kB" }
+              ],
+              "serviceWorker": true,
+              "ngswConfigPath": "ngsw-config.json",
+              "outputHashing": "all"
+            },
+            "development": {
+              "optimization": false,
+              "extractLicenses": false,
+              "sourceMap": true
+            }
+          },
+          "defaultConfiguration": "production"
+        },
+        "serve": {
+          "builder": "@angular/build:dev-server",
+          "options": {
+            "proxyConfig": "proxy.conf.json",
+            "open": true
+          },
+          "configurations": {
+            "production": {
+              "buildTarget": "admin-pwa:build:production"
+            },
+            "development": {
+              "buildTarget": "admin-pwa:build:development"
+            }
+          },
+          "defaultConfiguration": "development"
+        },
+        "extract-i18n": {
+          "builder": "@angular/build:extract-i18n"
+        },
+        "test": {
+          "builder": "@angular/build:karma",
+          "options": {
+            "polyfills": [
+              "zone.js",
+              "zone.js/testing"
+            ],
+            "tsConfig": "tsconfig.spec.json",
+            "inlineStyleLanguage": "scss",
+            "assets": [
+              {
+                "glob": "**/*",
+                "input": "public",
+                "output": "/"
+              }
+            ],
+            "styles": [
+              "src/styles.scss"
+            ]
+          }
+        }
+      }
+    }
+  }
+}
+
+────────────────────────────────────────────────────────
+📄 FILE: src/index.html
+────────────────────────────────────────────────────────
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>AdminPwa</title>
+  <base href="/">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/x-icon" href="favicon.ico">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#3880ff">
+</head>
+<body>
+  <app-root></app-root>
+</body>
+</html>
+
+────────────────────────────────────────────────────────
+📄 FILE: src/main.ts
+────────────────────────────────────────────────────────
+import { bootstrapApplication } from '@angular/platform-browser';
+import { AppComponent } from './app/app.component';
+import { appConfig } from './app/app.config';
+
+bootstrapApplication(AppComponent, appConfig).catch(err => console.error(err));
+
+⚠️  MISSING: src/styles.css
+
+⚠️  MISSING: src/manifest.webmanifest
+
+────────────────────────────────────────────────────────
+📄 FILE: src/app/environments/environment.ts
+────────────────────────────────────────────────────────
+export const environment = {
+  production: false,
+  apiUrl: '/api',
+  devLogin: {
+    enabled: true,
+    email: 'admin@demo.it',
+    password: 'Admin!2025'
+  }
+};
+────────────────────────────────────────────────────────
+📄 FILE: src/app/core/tokens.ts
+────────────────────────────────────────────────────────
+import { InjectionToken } from '@angular/core';
+export const API_URL = new InjectionToken<string>('API_URL');
+────────────────────────────────────────────────────────
+📄 FILE: src/app/app.config.ts
+────────────────────────────────────────────────────────
+// src/app/app.config.ts
+// Router pulito:
+// - /login (pubblica)
+// - Shell sempre visibile (menu + header)
+//   - /diagnostics (pubblica)
+//   - /reservations         → LISTA (proteggi se vuoi con authGuard)
+//   - /reservations/new     → NUOVA (protetta)
+// NOTE:
+// L’errore era la rotta inesistente /reservations/list: qui la lista è su /reservations.
+
+import { ApplicationConfig, isDevMode, APP_INITIALIZER } from '@angular/core';
+import { provideRouter, Routes } from '@angular/router';
+import { provideHttpClient, withInterceptors } from '@angular/common/http';
+import { provideIonicAngular } from '@ionic/angular/standalone';
+import { provideServiceWorker } from '@angular/service-worker';
+
+import { ShellPage } from './shell/shell.page';
+import { DiagnosticsPage } from './features/diagnostics/diagnostics.page';
+import { LoginPage } from './features/auth/login.page';
+
+import { API_URL } from './core/tokens';
+import { environment } from './environments/environment';
+import { apiErrorInterceptor } from './core/interceptors';
+import { authInterceptor } from './core/auth/auth.interceptor';
+import { authGuard } from './core/auth/auth.guard';
+import { AuthService } from './core/auth/auth.service';
+import { registerAppIcons } from './icons';
+
+// Registra le icone una volta all’avvio (necessario per <ion-icon name="...">)
+registerAppIcons();
+
+const routes: Routes = [
+  { path: 'login', component: LoginPage },
+
+  // 👉 aggiunta logout “di servizio”
+  {
+    path: 'logout',
+    loadComponent: () => import('./features/auth/logout.page').then(m => m.LogoutPage)
+  },
+
+  {
+    path: '',
+    component: ShellPage,
+    children: [
+      { path: '', pathMatch: 'full', redirectTo: 'diagnostics' },
+      { path: 'diagnostics', component: DiagnosticsPage },
+      {
+        path: 'reservations',
+        children: [
+          {
+            path: '',
+            loadComponent: () =>
+              import('./features/reservations/reservations-list.page')
+                .then(m => m.ReservationsListPage),
+            canActivate: [authGuard],
+          },
+          {
+            path: 'new',
+            loadComponent: () =>
+              import('./features/reservations/new-reservation.page')
+                .then(m => m.NewReservationPage),
+            canActivate: [authGuard],
+          },
+        ],
+      },
+      { path: '**', redirectTo: 'diagnostics' },
+    ],
+  },
+];
+
+
+export const appConfig: ApplicationConfig = {
+  providers: [
+    provideRouter(routes),
+    provideIonicAngular(),
+    provideHttpClient(withInterceptors([authInterceptor, apiErrorInterceptor])),
+    { provide: API_URL, useValue: environment.apiUrl },
+    {
+      provide: APP_INITIALIZER,
+      useFactory: (auth: AuthService) => () => auth.init(),
+      deps: [AuthService],
+      multi: true,
+    },
+    provideServiceWorker('ngsw-worker.js', {
+      enabled: !isDevMode(),
+      registrationStrategy: 'registerWhenStable:30000',
+    }),
+  ],
+};
+
+────────────────────────────────────────────────────────
+📄 FILE: src/app/core/auth/auth.service.ts
+────────────────────────────────────────────────────────
+import { Injectable, computed, signal, inject } from '@angular/core';
+import { HttpClient } from '@angular/common/http';
+import { API_URL } from '../tokens';
+
+
+export type User = { id: string; email: string; name?: string; roles?: string[] };
+export type LoginResponse = { token: string; user?: User };
+
+
+const TOKEN_KEY = 'auth_token';
+const USER_KEY = 'auth_user';
+
+
+@Injectable({ providedIn: 'root' })
+export class AuthService {
+private http = inject(HttpClient);
+private base = inject(API_URL);
+
+
+private _token = signal<string | null>(localStorage.getItem(TOKEN_KEY));
+private _user = signal<User | null>(parseUser(localStorage.getItem(USER_KEY)));
+
+
+readonly token = this._token.asReadonly();
+readonly user = this._user.asReadonly();
+readonly isAuthenticated = computed(() => !!this._token());
+
+
+/** Chiamato a bootstrap app per ripristinare la sessione */
+async init(): Promise<void> {
+if (!this._token()) return;
+try {
+if (!this._user()) {
+const me = await this.http.get<User>(`${this.base}/auth/me`).toPromise();
+this._user.set(me ?? null);
+if (me) localStorage.setItem(USER_KEY, JSON.stringify(me));
+}
+} catch {
+this.logout();
+}
+}
+
+
+async login(email: string, password: string): Promise<User | null> {
+const res = await this.http.post<LoginResponse>(`${this.base}/auth/login`, { email, password }).toPromise();
+if (!res?.token) throw new Error('Token mancante');
+this._token.set(res.token);
+localStorage.setItem(TOKEN_KEY, res.token);
+
+
+const me = res.user ?? await this.http.get<User>(`${this.base}/auth/me`).toPromise();
+this._user.set(me ?? null);
+if (me) localStorage.setItem(USER_KEY, JSON.stringify(me));
+return me ?? null;
+}
+
+
+logout() {
+this._token.set(null);
+this._user.set(null);
+localStorage.removeItem(TOKEN_KEY);
+localStorage.removeItem(USER_KEY);
+}
+}
+
+
+function parseUser(raw: string | null): User | null {
+try { return raw ? (JSON.parse(raw) as User) : null; } catch { return null; }
+}
+────────────────────────────────────────────────────────
+📄 FILE: src/app/core/auth/auth.guard.ts
+────────────────────────────────────────────────────────
+// src/app/core/auth/auth.guard.ts
+// Protegge le rotte riservate. Se non autenticato → redirect a /login?redirect=<url>
+// Mantiene la UX pulita: dopo il login si ritorna dove volevi andare.
+
+import { inject } from '@angular/core';
+import { CanActivateFn, Router, UrlTree } from '@angular/router';
+import { AuthService } from './auth.service';
+
+export const authGuard: CanActivateFn = () => {
+  const auth = inject(AuthService);
+  const router = inject(Router);
+
+  if (auth.isAuthenticated()) {
+    return true;
+  }
+  const target = encodeURIComponent(location.pathname + location.search);
+  return router.parseUrl(`/login?redirect=${target}`);
+};
+
+────────────────────────────────────────────────────────
+📄 FILE: src/app/core/auth/auth.interceptor.ts
+────────────────────────────────────────────────────────
+import { HttpInterceptorFn, HttpErrorResponse } from '@angular/common/http';
+import { inject } from '@angular/core';
+import { Router } from '@angular/router';
+import { AuthService } from './auth.service';
+import { catchError, throwError } from 'rxjs';
+
+
+export const authInterceptor: HttpInterceptorFn = (req, next) => {
+const auth = inject(AuthService);
+const router = inject(Router);
+const token = auth.token();
+
+
+const cloned = token ? req.clone({ setHeaders: { Authorization: `Bearer ${token}` } }) : req;
+
+
+return next(cloned).pipe(
+catchError((err: unknown) => {
+if (err instanceof HttpErrorResponse && err.status === 401) {
+auth.logout();
+const current = router.url || '/';
+router.navigate(['/login'], { queryParams: { redirect: current } });
+}
+return throwError(() => err);
+})
+);
+};
+────────────────────────────────────────────────────────
+📄 FILE: src/app/shell/shell.page.ts
+────────────────────────────────────────────────────────
+import { Component, inject, signal } from '@angular/core';
+import { CommonModule, NgFor } from '@angular/common';
+import {
+  IonHeader, IonToolbar, IonTitle, IonButtons, IonButton, IonMenuButton,
+  IonSplitPane, IonMenu, IonContent, IonList, IonMenuToggle, IonItem, IonIcon, IonLabel, IonBadge } from '@ionic/angular/standalone';
+import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
+import { AuthService } from '../core/auth/auth.service';
+import { ReservationsApi } from '../core/reservations/reservations.service';
+
+// === INIZIO MODIFICA (tipizzazione MenuItem con 'badge?') ===
+// ✅ Aggiunto: interfaccia forte per gli item del menu, con 'badge' opzionale.
+//    Così il template può leggere item.badge senza errori TS.
+interface MenuItem {
+  label: string;
+  path: string;
+  icon?: string;
+  badge?: boolean; // <- opzionale: se true, mostro il badge sul lato destro
+}
+// === FINE MODIFICA ===
+
+// type MenuItem = { label: string; path: string; icon?: string };
+
+@Component({
+  selector: 'app-shell',
+  standalone: true,
+  imports: [IonBadge, 
+    // Angular
+    CommonModule, NgFor, RouterLink, RouterLinkActive,
+    // Ionic
+    IonHeader, IonToolbar, IonTitle, IonButtons, IonButton, IonMenuButton,
+    IonSplitPane, IonMenu, IonContent, IonList, IonMenuToggle, IonItem, IonIcon, IonLabel,
+    // Router outlet
+    RouterOutlet,
+  ],
+  templateUrl: './shell.page.html',
+  styleUrls: ['./shell.page.scss'],
+})
+
+
+export class ShellPage {
+  private auth = inject(AuthService);
+  private router = inject(Router);
+   private api = inject(ReservationsApi);
+
+  // 🔖 Voci del menù (rotta + icona)
+  items: MenuItem[] = [
+    { label: 'Dashboard',            path: '/diagnostics',      icon: 'home' },
+    { label: 'Lista prenotazioni',   path: '/reservations',     icon: 'list' ,   badge: true },
+    { label: 'Nuova prenotazione',   path: '/reservations/new', icon: 'add-circle' },
+    
+  ];
+// === INIZIO MODIFICA (badge "In attesa") ===
+  // ✅ Aggiunto: signal con il numero di prenotazioni 'pending' di oggi.
+  pendingToday = signal<number>(0);
+
+  // Aggiorno il badge all'avvio e ogni 60s (leggero).
+  private timer: any;
+
+  constructor() {
+    this.refreshPendingBadge();
+    this.timer = setInterval(() => this.refreshPendingBadge(), 60_000);
+      console.log('🧭 [Shell] menu items:', this.items);
+  }
+
+  ngOnDestroy(): void {
+    if (this.timer) clearInterval(this.timer);
+  }
+
+  // Calcolo YYYY-MM-DD locale (coerente con FE → BE)
+  private todayISO(): string {
+    const d = new Date();
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  // Chiama il BE per aggiornare il conteggio; log a emoji per debug veloce
+  refreshPendingBadge() {
+    const from = this.todayISO();
+    const to = from;
+    this.api.countByStatus({ from, to }).subscribe({
+      next: (res) => {
+        const n = Number(res?.pending ?? 0);
+        this.pendingToday.set(n);
+        console.log('🟡 [Shell] pending today =', n);
+      },
+      error: (err) => {
+        console.warn('⚠️ [Shell] countByStatus KO', err);
+        this.pendingToday.set(0);
+      }
+    });
+  }
+  // === FINE MODIFICA ===
+
+
+
+  onLogout() {
+    console.log('🔐 [Shell] logout()');
+    this.auth.logout();
+    this.router.navigate(['/login'], { queryParams: { redirect: '/diagnostics' } });
+  }
+}
+
+────────────────────────────────────────────────────────
+📄 FILE: src/app/shell/shell.page.html
+────────────────────────────────────────────────────────
+<!-- Header superiore -->
+<ion-header>
+  <ion-toolbar>
+    <!-- 🔧 In desktop vogliamo vedere SEMPRE l’hamburger -->
+    <ion-buttons slot="start">
+      <ion-menu-button [autoHide]="false"></ion-menu-button>
+    </ion-buttons>
+
+    <ion-title>Admin</ion-title>
+
+    <ion-buttons slot="end">
+      <ion-button (click)="onLogout()">Logout</ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<!-- Layout a due colonne: menu a sinistra, contenuti a destra -->
+<!-- when="(min-width: 992px)" => da 992px in su il menu resta sempre visibile -->
+<ion-split-pane when="(min-width: 992px)" contentId="main-content">
+  <!-- SIDEMENU -->
+  <ion-menu contentId="main-content" type="overlay">
+    <ion-header>
+      <ion-toolbar>
+        <ion-title>Menu</ion-title>
+      </ion-toolbar>
+    </ion-header>
+
+    <ion-content>
+      <ion-list>
+        <!-- 🧠 TRUCCO: [autoHide]="false"
+             Se lasci auto-hide="true", in split-pane (desktop) gli item si nascondono! -->
+        <ion-menu-toggle [autoHide]="false" *ngFor="let item of items">
+          <ion-item button [routerLink]="item.path" routerLinkActive="ion-activated">
+            <!-- Le icone appaiono se sono state registrate (vedi icons.ts) -->
+            <ion-icon slot="start" *ngIf="item.icon" [name]="item.icon"></ion-icon>
+            <ion-label>{{ item.label }}</ion-label>
+                        <!-- === INIZIO MODIFICA (badge "In attesa") === -->
+            <!-- ✅ Aggiunto: se la voce è la lista prenotazioni (item.badge true) mostro il badge -->
+            <ion-badge *ngIf="item.badge && pendingToday() > 0" slot="end" color="warning">
+              {{ pendingToday() }}
+            </ion-badge>
+            <!-- === FINE MODIFICA === -->
+          </ion-item>
+        </ion-menu-toggle>
+      </ion-list>
+    </ion-content>
+  </ion-menu>
+
+  <!-- AREA CONTENUTI (deve avere lo stesso id di contentId sopra) -->
+  <ion-content id="main-content">
+    <router-outlet></router-outlet>
+  </ion-content>
+</ion-split-pane>
+
+────────────────────────────────────────────────────────
+📄 FILE: src/app/shell/shell.page.scss
+────────────────────────────────────────────────────────
+/* Evidenzia la voce attiva in lista */
+ion-item.ion-activated {
+  --background: rgba(56, 128, 255, 0.12);
+}
+
+/* (Se avevi regole “mobile-only” che nascondevano l’hamburger su desktop, rimuovile) */
+/*
+.mobile-only { display: none; }
+@media (max-width: 991px) {
+  .mobile-only { display: flex; }
+}
+*/
+
+────────────────────────────────────────────────────────
+📄 FILE: src/app/features/auth/login.page.ts
+────────────────────────────────────────────────────────
+// src/app/features/auth/login.page.ts
+// Login semplice, con credenziali precompilate in DEV per velocizzare i test.
+// Logica:
+// - se valido → auth.login → redirect a ?redirect=... oppure /reservations
+// - mostra errori chiari, ha un mini ping di debug (opzionale)
+
+import { Component, inject, signal } from '@angular/core';
+import { ReactiveFormsModule, FormControl, FormGroup, Validators } from '@angular/forms';
+import { NgIf } from '@angular/common';
+import { Router, ActivatedRoute } from '@angular/router';
+
+import {
+  IonContent, IonHeader, IonToolbar, IonTitle,
+  IonItem, IonLabel, IonInput, IonButton, IonNote
+} from '@ionic/angular/standalone';
+
+import { AuthService } from '../../core/auth/auth.service';
+import { HttpClient } from '@angular/common/http';
+
+@Component({
+  standalone: true,
+  selector: 'app-login',
+  imports: [
+    NgIf, ReactiveFormsModule,
+    IonContent, IonHeader, IonToolbar, IonTitle,
+    IonItem, IonLabel, IonInput, IonButton, IonNote
+  ],
+  templateUrl: './login.page.html',
+})
+export class LoginPage {
+  private auth = inject(AuthService);
+  private router = inject(Router);
+  private route = inject(ActivatedRoute);
+  private http = inject(HttpClient);
+
+  loading = signal(false);
+  error = signal<string | null>(null);
+
+  // 🔧 Prefill credenziali DEV (puoi modificare qui se necessario)
+  form = new FormGroup({
+    email: new FormControl<string>('admin@demo.it', {
+      nonNullable: true, validators: [Validators.required, Validators.email],
+    }),
+    password: new FormControl<string>('admin', {
+      nonNullable: true, validators: [Validators.required],
+    }),
+  });
+
+  get email() { return this.form.controls.email; }
+  get password() { return this.form.controls.password; }
+
+  async onSubmit() {
+    if (this.form.invalid) return;
+
+    // (Opzionale) PING di debug lato FE per capire proxy/server
+    this.http.get('/api/ping').subscribe({
+      next: (v) => console.log('[LoginPage] PING OK', v),
+      error: (e) => console.error('[LoginPage] PING KO', e),
+    });
+
+    this.loading.set(true);
+    this.error.set(null);
+
+    try {
+      const { email, password } = this.form.getRawValue();
+      await this.auth.login(email, password);
+
+      // Redirect post-login
+      const redirect = this.route.snapshot.queryParamMap.get('redirect')
+        || '/reservations'; // 👈 lista prenotazioni; se preferisci 'new', metti '/reservations/new'
+      this.router.navigateByUrl(redirect);
+
+    } catch (e: any) {
+      this.error.set(e?.message ?? 'Credenziali non valide');
+    } finally {
+      this.loading.set(false);
+    }
+  }
+}
+
+────────────────────────────────────────────────────────
+📄 FILE: src/app/features/auth/login.page.html
+────────────────────────────────────────────────────────
+<!-- src/app/features/auth/login.page.html -->
+<ion-header>
+  <ion-toolbar>
+    <ion-title>Login</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <form [formGroup]="form" (ngSubmit)="onSubmit()" style="max-width:420px; margin:24px auto; padding:16px;">
+
+    <ion-item>
+      <ion-label position="stacked">Email</ion-label>
+      <ion-input type="email" formControlName="email" placeholder="you@example.com"></ion-input>
+    </ion-item>
+    <ion-note *ngIf="email.invalid && (email.dirty || email.touched)" color="danger" style="margin-left:8px;">
+      Email non valida
+    </ion-note>
+
+    <ion-item style="margin-top:12px;">
+      <ion-label position="stacked">Password</ion-label>
+      <ion-input type="password" formControlName="password" placeholder="••••••••"></ion-input>
+    </ion-item>
+    <ion-note *ngIf="password.invalid && (password.dirty || password.touched)" color="danger" style="margin-left:8px;">
+      Password richiesta
+    </ion-note>
+
+    <ion-button expand="block" type="submit" [disabled]="loading() || form.invalid" style="margin-top:16px;">
+      {{ loading() ? 'Accesso…' : 'Entra' }}
+    </ion-button>
+
+    <p *ngIf="error()" style="color:#dc2626; margin-top:10px;">{{ error() }}</p>
+  </form>
+</ion-content>
+
+────────────────────────────────────────────────────────
+📄 FILE: src/app/features/reservations/reservations-list.page.ts
+────────────────────────────────────────────────────────
+// src/app/features/reservations/reservations-list.page.ts
+// Lista Prenotazioni (Admin) — filtri rapidi + ricerca + refresher.
+// ATTENZIONE: questo file NON deve contenere HTML. Il template è esterno.
+
+import { Component, computed, inject, signal } from '@angular/core';
+import { NgFor, NgIf, DatePipe, AsyncPipe } from '@angular/common';
+import {
+  IonHeader, IonToolbar, IonTitle, IonContent, IonList, IonItem,
+  IonLabel, IonBadge, IonButtons, IonButton, IonIcon, IonRefresher,
+  IonRefresherContent, IonSearchbar, IonSegment, IonSegmentButton
+} from '@ionic/angular/standalone';
+import { RouterLink } from '@angular/router';
+
+import {
+  ReservationsApi,
+  Reservation,
+  ReservationStatus
+} from '../../core/reservations/reservations.service';
+
+import { addDays, fmtDate, todayISO } from '../../shared/utils.date';
+
+@Component({
+  standalone: true,
+  selector: 'app-reservations-list',
+  templateUrl: './reservations-list.page.html', // 👈 Template esterno
+  imports: [
+    // Angular
+    NgFor, NgIf, DatePipe, AsyncPipe, RouterLink,
+    // Ionic
+    IonHeader, IonToolbar, IonTitle, IonContent, IonList, IonItem,
+    IonLabel, IonBadge, IonButtons, IonButton, IonIcon, IonRefresher,
+    IonRefresherContent, IonSearchbar, IonSegment, IonSegmentButton
+  ],
+})
+export class ReservationsListPage {
+  private api = inject(ReservationsApi);
+
+  // Stato filtri (signals)
+  rangePreset = signal<'today' | '7d' | 'all'>('today');
+  status = signal<ReservationStatus | 'all'>('all');
+  q = signal<string>('');
+
+  // Derivati (range in formato YYYY-MM-DD)
+  from = computed(() => {
+    const p = this.rangePreset();
+    if (p === 'today') return todayISO();
+    if (p === '7d') return fmtDate(addDays(new Date(), -7));
+    return undefined;
+  });
+  to = computed(() => {
+    const p = this.rangePreset();
+    if (p === 'today') return fmtDate(new Date());
+    if (p === '7d') return fmtDate(new Date());
+    return undefined;
+  });
+
+  // Dati
+  loading = signal(false);
+  error = signal<string | null>(null);
+  rows = signal<Reservation[]>([]);
+
+  // UI helper — colore badge per stato
+  getStatusColor(s: ReservationStatus) {
+    switch (s) {
+      case 'pending': return 'warning';
+      case 'accepted': return 'success';
+      case 'rejected': return 'danger';
+      case 'cancelled': return 'medium';
+      default: return 'medium';
+    }
+  }
+
+  ionViewWillEnter() {
+    // carica appena entri nella pagina
+    this.load();
+  }
+
+  async load(ev?: CustomEvent) {
+    this.loading.set(true);
+    this.error.set(null);
+    try {
+      const params = {
+        from: this.from(),
+        to: this.to(),
+        status: this.status(),
+        q: this.q().trim() || undefined,
+      };
+      console.log('[ReservationsList] list params →', params);
+      const data = await this.api.list(params).toPromise();
+      this.rows.set(Array.isArray(data) ? data : []);
+      console.log('[ReservationsList] rows:', this.rows().length);
+    } catch (e: any) {
+      console.error('[ReservationsList] load error:', e);
+      this.error.set(e?.message ?? 'Errore durante il caricamento');
+    } finally {
+      this.loading.set(false);
+      if (ev) (ev.target as any)?.complete?.(); // completa eventuale refresher
+    }
+  }
+
+  onPresetChange(ev: CustomEvent) {
+    this.rangePreset.set((ev.detail as any).value || 'today');
+    this.load();
+  }
+  onStatusChange(ev: CustomEvent) {
+    this.status.set((ev.detail as any).value || 'all');
+    this.load();
+  }
+  onSearchChange(ev: CustomEvent) {
+    this.q.set((ev.detail as any).value || '');
+    this.load(); // debounce semplice: ricarico subito
+  }
+
+  clearSearch() {
+    if (this.q()) {
+      this.q.set('');
+      this.load();
+    }
+  }
+
+  trackById(_i: number, r: Reservation) { return r.id; }
+}
+
+────────────────────────────────────────────────────────
+📄 FILE: src/app/features/reservations/reservations-list.page.html
+────────────────────────────────────────────────────────
+<ion-header>
+  <ion-toolbar>
+    <ion-title>Prenotazioni</ion-title>
+    <ion-buttons slot="end">
+      <ion-button routerLink="/reservations/new" routerDirection="forward">Nuova</ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <!-- Filtri rapidi -->
+  <div style="padding: 12px;">
+    <ion-segment [value]="rangePreset()" (ionChange)="onPresetChange($event)" mode="md">
+      <ion-segment-button value="today">Oggi</ion-segment-button>
+      <ion-segment-button value="7d">Ultimi 7 giorni</ion-segment-button>
+      <ion-segment-button value="all">Tutte</ion-segment-button>
+    </ion-segment>
+
+    <div style="height: 8px;"></div>
+
+    <ion-segment [value]="status()" (ionChange)="onStatusChange($event)" mode="md">
+      <ion-segment-button value="all">Tutti</ion-segment-button>
+      <ion-segment-button value="pending">In attesa</ion-segment-button>
+      <ion-segment-button value="accepted">Accettate</ion-segment-button>
+      <ion-segment-button value="rejected">Rifiutate</ion-segment-button>
+      <ion-segment-button value="cancelled">Cancellate</ion-segment-button>
+    </ion-segment>
+
+    <div style="height: 8px;"></div>
+
+    <ion-searchbar
+      placeholder="Cerca per nome / telefono / email"
+      [value]="q()"
+      (ionInput)="onSearchChange($event)"
+      (ionClear)="clearSearch()"
+      showCancelButton="never"
+      mode="md">
+    </ion-searchbar>
+  </div>
+
+  <!-- Pull to refresh -->
+  <ion-refresher slot="fixed" (ionRefresh)="load($event)">
+    <ion-refresher-content></ion-refresher-content>
+  </ion-refresher>
+
+  <!-- Error -->
+  <div *ngIf="error()" style="padding: 12px; color:#dc2626;">
+    {{ error() }}
+  </div>
+
+  <!-- Lista -->
+  <ion-list *ngIf="!error()">
+    <ion-item button detail="false" *ngFor="let r of rows(); trackBy: trackById">
+      <ion-label>
+        <div style="display:flex; align-items:center; gap:6px;">
+          <b>{{ r.customer_first || '—' }} {{ r.customer_last || '' }}</b>
+          <ion-badge [color]="getStatusColor(r.status)">{{ r.status }}</ion-badge>
+        </div>
+
+        <div style="font-size: 13px; margin-top:2px;">
+          {{ r.phone || '—' }}
+          <span *ngIf="r.email" style="opacity:.6"> &middot; {{ r.email }}</span>
+          <span style="opacity:.6"> &middot; {{ r.party_size }} coperti</span>
+        </div>
+
+        <div style="font-size: 12px; margin-top:2px; opacity:.8;">
+          {{ r.start_at | date:'short' }} → {{ r.end_at | date:'short' }}
+          <span *ngIf="r.table_number"> &middot; Tavolo {{ r.table_number }}</span>
+        </div>
+
+        <div *ngIf="r.notes" style="margin-top:4px; opacity:.7;">
+          Note: {{ r.notes }}
+        </div>
+      </ion-label>
+    </ion-item>
+  </ion-list>
+
+  <!-- Empty state -->
+  <div *ngIf="!loading() && !error() && !rows().length" style="padding: 12px; opacity:.7;">
+    Nessuna prenotazione trovata per i filtri selezionati.
+  </div>
+
+  <!-- Azioni -->
+  <div style="padding: 12px;">
+    <ion-button fill="outline" size="small" (click)="load()">Ricarica</ion-button>
+  </div>
+</ion-content>
+
+────────────────────────────────────────────────────────
+📄 FILE: src/app/features/reservations/new-reservation.page.ts
+────────────────────────────────────────────────────────
+// src/app/features/reservations/new-reservation.page.ts
+// Pagina: Nuova prenotazione (Admin)
+//
+// Stile: commenti lunghi, log chiari e puntuali.
+// LOGICA:
+// - Carico le SALE all’avvio (GET /api/rooms).
+// - Quando l’utente seleziona una SALA → carico i TAVOLI di quella sala (GET /api/tables/by-room/:id).
+// - start_at è una ISO string fornita da ion-datetime inline (niente modal).
+// - end_at non la chiediamo: la calcola il BE secondo regole da env (pranzo/cena).
+// - In caso di successo → redirect alla LISTA prenotazioni (/reservations).
+//
+// NOTE IMPORTANTI:
+// - Usa il service ReservationsApi dal path CORRETTO: '../../core/api/reservations/reservations.service'.
+// - Ho aggiunto log prima e dopo le chiamate API per vedere chiaramente cosa succede.
+// - La select Tavoli è disabilitata finché non selezioni la Sala o finché la lista tavoli è vuota.
+
+import { Component, inject, signal } from '@angular/core';
+import { FormBuilder, Validators, ReactiveFormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
+
+// Angular common
+import { NgIf, NgFor } from '@angular/common';
+
+// Ionic standalone
+import {
+  IonContent, IonHeader, IonToolbar, IonTitle,
+  IonItem, IonLabel, IonInput, IonButton, IonSelect, IonSelectOption,
+  IonTextarea, IonDatetime, IonNote, IonList
+} from '@ionic/angular/standalone';
+
+// ⚠️ IMPORT del service (path allineato alla struttura core/api/…)
+import { ReservationsApi, Room, Table } from '../../core/reservations/reservations.service';
+
+@Component({
+  standalone: true,
+  selector: 'app-new-reservation',
+  templateUrl: './new-reservation.page.html',
+  imports: [
+    // Angular
+    ReactiveFormsModule, NgIf, NgFor,
+    // Ionic
+    IonContent, IonHeader, IonToolbar, IonTitle,
+    IonItem, IonLabel, IonInput, IonButton, IonSelect, IonSelectOption,
+    IonTextarea, IonDatetime, IonNote, IonList
+  ]
+})
+export class NewReservationPage {
+  private fb = inject(FormBuilder);
+  private api = inject(ReservationsApi);
+  private router = inject(Router);
+
+  // Stato UI (signals semplici)
+  loading = signal(false);
+  rooms   = signal<Room[]>([]);
+  tables  = signal<Table[]>([]);
+
+  // Form reattivo: campi base. start_at è ISO generata da <ion-datetime>.
+  form = this.fb.group({
+    customer_first: [''],
+    customer_last : [''],
+    phone         : [''],
+    email         : ['', Validators.email],
+    party_size    : [1,  [Validators.required, Validators.min(1)]],
+    start_at      : ['', [Validators.required]],  // ISO (es. 2025-10-12T12:30)
+    end_at        : [''],                         // opzionale (BE la calcola)
+    room_id       : [null as number | null],
+    table_id      : [null as number | null],
+    notes         : ['']
+  });
+
+  // Helper getter per validazioni UI
+  get startCtrl() { return this.form.controls.start_at; }
+  get emailCtrl() { return this.form.controls.email; }
+  get partyCtrl() { return this.form.controls.party_size; }
+
+  constructor() {
+    // 1) Carica le SALE appena entro in pagina
+    this.loadRooms();
+
+    // 2) Reazione al cambio SALA → carica TAVOLI della sala selezionata
+    this.form.get('room_id')!.valueChanges.subscribe(async (roomId) => {
+      // reset del tavolo selezionato
+      this.form.patchValue({ table_id: null }, { emitEvent: false });
+
+      if (!roomId) {
+        console.log('[NewReservation] room_id nullo → svuoto tables');
+        this.tables.set([]);
+        return;
+      }
+
+      try {
+        console.log('[NewReservation] ▶️ chiamata listTablesByRoom(', roomId, ')');
+        const rows = await this.api.listTablesByRoom(Number(roomId)).toPromise();
+        console.log('[NewReservation] ◀️ risposta listTablesByRoom →', rows);
+        this.tables.set(rows || []);
+        console.log('[NewReservation] tavoli caricati:', this.tables().length);
+      } catch (e) {
+        console.warn('[NewReservation] listTablesByRoom KO', e);
+        this.tables.set([]);
+      }
+    });
+
+    // 3) Debug: vedere i cambi di data/ora
+    this.form.get('start_at')!.valueChanges.subscribe(v =>
+      console.log('⏰ [NewReservation] start_at →', v)
+    );
+  }
+
+  async loadRooms() {
+    try {
+      console.log('[NewReservation] ▶️ chiamata listRooms()');
+      const rows = await this.api.listRooms().toPromise();
+      console.log('[NewReservation] ◀️ risposta rooms →', rows);
+      this.rooms.set(rows || []);
+      console.log('[NewReservation] sale caricate:', this.rooms().length);
+
+      // UX: se ho almeno una sala, posso pre-selezionarla per velocizzare
+      if (this.rooms().length && !this.form.value.room_id) {
+        const firstId = this.rooms()[0].id;
+        console.log('[NewReservation] pre-seleziono room_id =', firstId);
+        this.form.patchValue({ room_id: firstId });
+        // NB: la patch scatena la valueChanges e quindi carica i tavoli
+      }
+    } catch (e) {
+      console.warn('[NewReservation] listRooms KO', e);
+      this.rooms.set([]);
+    }
+  }
+
+  async onSubmit() {
+    if (this.form.invalid) {
+      this.form.markAllAsTouched();
+      return;
+    }
+
+    this.loading.set(true);
+    try {
+      // Costruisco DTO "pulito"
+      const v = this.form.value;
+      const dto = {
+        customer_first: v.customer_first?.trim() || null,
+        customer_last : v.customer_last?.trim() || null,
+        phone         : v.phone?.trim() || null,
+        email         : v.email?.trim() || null,
+        party_size    : v.party_size!,
+        start_at      : v.start_at!,          // ISO locale; il BE normalizza e calcola end_at
+        end_at        : v.end_at || null,     // opzionale (non necessaria)
+        notes         : v.notes?.trim() || null,
+        table_id      : v.table_id || null
+      };
+
+      console.log('📨 [NewReservation] create →', dto);
+      const res = await this.api.create(dto);
+      console.log('✅ [NewReservation] created →', res);
+
+      // Dopo salvataggio → vai alla lista
+      this.router.navigateByUrl('/reservations');
+
+    } catch (e: any) {
+      console.error('💥 [NewReservation] create KO', e);
+      alert(e?.error?.message || e?.message || 'Errore creazione prenotazione');
+    } finally {
+      this.loading.set(false);
+    }
+  }
+}
+
+────────────────────────────────────────────────────────
+📄 FILE: src/app/features/reservations/new-reservation.page.html
+────────────────────────────────────────────────────────
+<!-- src/app/features/reservations/new-reservation.page.html -->
+<!--
+Form chiaro e lineare.
+- Datetime inline (niente modal): massima semplicità e zero sorprese.
+- Sala → carica Tavoli; la select Tavoli è disabilitata finché non c’è una sala selezionata o non arrivano tavoli.
+- Il BE calcola end_at: qui chiediamo solo start_at.
+-->
+
+<ion-header>
+  <ion-toolbar>
+    <ion-title>Nuova prenotazione</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <div style="max-width:720px; margin:0 auto; padding:16px;">
+    <form [formGroup]="form" (ngSubmit)="onSubmit()">
+
+      <ion-item>
+        <ion-label position="stacked">Nome</ion-label>
+        <ion-input formControlName="customer_first" placeholder="Mario"></ion-input>
+      </ion-item>
+
+      <ion-item style="margin-top:8px;">
+        <ion-label position="stacked">Cognome</ion-label>
+        <ion-input formControlName="customer_last" placeholder="Rossi"></ion-input>
+      </ion-item>
+
+      <ion-item style="margin-top:8px;">
+        <ion-label position="stacked">Telefono</ion-label>
+        <ion-input formControlName="phone" placeholder="+39 ..."></ion-input>
+      </ion-item>
+
+      <ion-item style="margin-top:8px;">
+        <ion-label position="stacked">Email</ion-label>
+        <ion-input formControlName="email" type="email" placeholder="mario@example.com"></ion-input>
+      </ion-item>
+      <ion-note *ngIf="emailCtrl.invalid && (emailCtrl.dirty || emailCtrl.touched)" color="danger" style="margin-left:8px;">
+        Email non valida
+      </ion-note>
+
+      <ion-item style="margin-top:12px;">
+        <ion-label position="stacked">Coperti</ion-label>
+        <ion-input formControlName="party_size" type="number" min="1"></ion-input>
+      </ion-item>
+
+      <!-- Date/Time semplice (inline) -->
+      <div style="margin-top:12px;">
+        <ion-label>Data e ora</ion-label>
+        <ion-datetime
+          formControlName="start_at"
+          presentation="date-time"
+          preferWheel="true">
+        </ion-datetime>
+      </div>
+      <ion-note *ngIf="startCtrl.invalid && (startCtrl.dirty || startCtrl.touched)" color="danger" style="margin-left:8px;">
+        Data/ora obbligatorie
+      </ion-note>
+
+      <!-- Sala -->
+      <ion-item style="margin-top:12px;">
+        <ion-label position="stacked">Sala</ion-label>
+        <ion-select formControlName="room_id" interface="popover" placeholder="Seleziona sala">
+          <ion-select-option *ngFor="let r of rooms()" [value]="r.id">{{ r.name }}</ion-select-option>
+        </ion-select>
+      </ion-item>
+
+      <!-- Tavolo -->
+      <ion-item style="margin-top:8px;">
+        <ion-label position="stacked">Tavolo</ion-label>
+        <ion-select
+          formControlName="table_id"
+          interface="popover"
+          placeholder="Seleziona tavolo"
+          [disabled]="!form.value.room_id || !tables().length">
+          <ion-select-option *ngFor="let t of tables()" [value]="t.id">
+            Tavolo {{ t.table_number || t.label || t.id }} ({{ t.capacity || '?' }})
+          </ion-select-option>
+        </ion-select>
+      </ion-item>
+
+      <ion-item style="margin-top:12px;">
+        <ion-label position="stacked">Note</ion-label>
+        <ion-textarea formControlName="notes" autoGrow="true" placeholder="Es. intolleranze, richieste..."></ion-textarea>
+      </ion-item>
+
+      <ion-button expand="block" type="submit" [disabled]="loading() || form.invalid" style="margin-top:16px;">
+        {{ loading() ? 'Creazione…' : 'Crea prenotazione' }}
+      </ion-button>
+    </form>
+  </div>
+</ion-content>
+
+────────────────────────────────────────────────────────
+📄 FILE: src/app/core/reservations/reservations.service.ts
+────────────────────────────────────────────────────────
+// src/app/core/reservations/reservations.service.ts
+//
+// Service unico per:
+//  - Prenotazioni (list/byId/create)
+//  - Supporto UI: Rooms e Tables (lista, per sala, cambio stato)
+//
+// Stile: commenti lunghi, tipi chiari, niente sorprese.
+// NOTE IMPORTANTI:
+//  1) Il BE **NON** usa più la colonna inesistente `t.label`. Al suo posto
+//     genera un alias `label` come "Tavolo <numero>" (o fallback all'id).
+//     Qui nel FE tipizziamo `label?: string` ma NON lo pretendiamo: se manca
+//     usiamo `table_number`/`id`.
+//  2) Le query di lista accettano filtri tipizzati (ReservationQuery).
+//  3) Per `create()` uso firstValueFrom per avere una Promise comoda nel FE.
+//
+// Rotte BE attese:
+//   GET  /api/rooms
+//   GET  /api/tables
+//   GET  /api/tables/by-room/:roomId
+//   PATCH /api/tables/:id/status   { status: 'free'|'reserved'|'occupied' }
+//   GET  /api/reservations?from=YYYY-MM-DD&to=YYYY-MM-DD&status=all|pending|...
+//   GET  /api/reservations/:id
+//   POST /api/reservations         { ...NewReservationDto }
+//
+// Se cambi qualcosa nel BE, aggiorna qui le path in un solo punto!
+
+import { inject, Injectable } from '@angular/core';
+import { HttpClient, HttpParams } from '@angular/common/http';
+import { firstValueFrom } from 'rxjs';
+import { API_URL } from '../tokens';
+
+// ---------------------- Tipi Rooms/Tables ----------------------
+
+export interface Room {
+  id: number;
+  name: string;
+  is_active?: 0 | 1 | boolean;
+  sort_order?: number | null;
+}
+
+export type TableStatus = 'free' | 'reserved' | 'occupied';
+
+export interface Table {
+  id: number;
+  room_id: number | null;
+  table_number?: number | null;
+  capacity?: number | null;     // nel BE seats -> capacity
+  status?: TableStatus;
+  label?: string;               // alias "Tavolo <n>" generato dal BE (opzionale)
+  updated_at?: string;          // ISO
+}
+
+// ---------------------- Tipi Reservations ----------------------
+
+export type ReservationStatus = 'pending' | 'accepted' | 'rejected' | 'cancelled';
+
+export interface Reservation {
+  id: number;
+  customer_first?: string | null;
+  customer_last?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  party_size: number;
+  start_at: string;               // ISO (UTC lato BE)
+  end_at: string;                 // ISO (calcolata dal BE)
+  status: ReservationStatus;
+  table_id?: number | null;
+  table_number?: number | null;
+  room_id?: number | null;
+  table_name?: string | null;     // es. "Tavolo 12" (opzionale)
+  notes?: string | null;
+  created_at?: string;            // ISO
+}
+
+// Filtri lista prenotazioni (coerenti col BE)
+export interface ReservationQuery {
+  from?: string;                             // YYYY-MM-DD  (UTC day)
+  to?: string;                               // YYYY-MM-DD
+  status?: ReservationStatus | 'all';        // default: all
+  q?: string;                                // ricerca full-text (nome/tel/email)
+}
+
+// DTO creazione prenotazione
+export interface NewReservationDto {
+  customer_first?: string | null;
+  customer_last?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  party_size: number;
+  start_at: string;               // ISO locale dal FE; BE normalizza/usa regole env
+  end_at?: string | null;         // opzionale: se non presente la calcola il BE
+  notes?: string | null;
+  table_id?: number | null;
+  client_token?: string | null;
+}
+
+// === INIZIO MODIFICA (CountByStatus types) ===
+// ✅ Aggiunto: risposta per conteggi per status (usata nel badge)
+export interface CountByStatusResponse {
+  pending?: number;
+  accepted?: number;
+  rejected?: number;
+  cancelled?: number;
+  total?: number;
+}
+// === FINE MODIFICA ===
+
+@Injectable({ providedIn: 'root' })
+export class ReservationsApi {
+  private http = inject(HttpClient);
+  private base = inject(API_URL); // es. '/api'
+
+  // ---------------------- Reservations ----------------------
+
+  /** Lista prenotazioni con filtri opzionali */
+  list(params: ReservationQuery = {}) {
+    const httpParams = new HttpParams({ fromObject: toStringParams(params) });
+    return this.http.get<Reservation[]>(`${this.base}/reservations`, { params: httpParams });
+  }
+
+  /** Dettaglio prenotazione */
+  byId(id: number) {
+    return this.http.get<Reservation>(`${this.base}/reservations/${id}`);
+  }
+
+  /** Crea prenotazione (ritorna la prenotazione completa dal BE) */
+  async create(dto: NewReservationDto): Promise<Reservation> {
+    return await firstValueFrom(
+      this.http.post<Reservation>(`${this.base}/reservations`, dto)
+    );
+  }
+
+  // ---------------------- Rooms/Tables (supporto UI) ----------------------
+
+  /** Lista sale */
+  listRooms() {
+    return this.http.get<Room[]>(`${this.base}/rooms`);
+  }
+
+  /** Lista TUTTI i tavoli */
+  listTables() {
+    return this.http.get<Table[]>(`${this.base}/tables`);
+  }
+
+  /** Lista tavoli per sala */
+  listTablesByRoom(roomId: number) {
+    return this.http.get<Table[]>(`${this.base}/tables/by-room/${roomId}`);
+  }
+
+  /** Aggiorna lo stato di un tavolo (free|reserved|occupied) */
+  updateTableStatus(id: number, status: TableStatus) {
+    return this.http.patch<{ ok: boolean; id: number; status: TableStatus }>(
+      `${this.base}/tables/${id}/status`,
+      { status }
+    );
+  }
+
+    // === INIZIO MODIFICA (countByStatus) ===
+  // ✅ Aggiunto: chiama il BE per avere il conteggio per status.
+  //    - params.from / params.to: 'YYYY-MM-DD'
+  //    - Ritorna { pending, accepted, rejected, cancelled, total }
+  countByStatus(params: { from?: string; to?: string }) {
+    const httpParams = new HttpParams({ fromObject: cleanParams(params) });
+    return this.http.get<CountByStatusResponse>(`${this.base}/reservations/count-by-status`, {
+      params: httpParams
+    });
+  }
+  // === FINE MODIFICA ===
+
+}
+
+
+
+// Helper piccolo: toglie undefined/null
+function cleanParams<T extends Record<string, any>>(p: T): Record<string, string> {
+  const out: Record<string, string> = {};
+  Object.keys(p || {}).forEach(k => {
+    const v = (p as any)[k];
+    if (v !== undefined && v !== null && String(v).trim() !== '') out[k] = String(v);
+  });
+  return out;
+}
+
+// Converte i filtri in stringhe per HttpParams (ignora vuoti/"all")
+function toStringParams(q: ReservationQuery): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (q.from) out['from'] = String(q.from);
+  if (q.to) out['to'] = String(q.to);
+  if (q.status && q.status !== 'all') out['status'] = String(q.status);
+  if (q.q) out['q'] = String(q.q);
+  return out;
+}
+
+
+
+────────────────────────────────────────────────────────
+📄 FILE: src/app/core/reservations/reservations.service.ts
+────────────────────────────────────────────────────────
+// src/app/core/reservations/reservations.service.ts
+//
+// Service unico per:
+//  - Prenotazioni (list/byId/create)
+//  - Supporto UI: Rooms e Tables (lista, per sala, cambio stato)
+//
+// Stile: commenti lunghi, tipi chiari, niente sorprese.
+// NOTE IMPORTANTI:
+//  1) Il BE **NON** usa più la colonna inesistente `t.label`. Al suo posto
+//     genera un alias `label` come "Tavolo <numero>" (o fallback all'id).
+//     Qui nel FE tipizziamo `label?: string` ma NON lo pretendiamo: se manca
+//     usiamo `table_number`/`id`.
+//  2) Le query di lista accettano filtri tipizzati (ReservationQuery).
+//  3) Per `create()` uso firstValueFrom per avere una Promise comoda nel FE.
+//
+// Rotte BE attese:
+//   GET  /api/rooms
+//   GET  /api/tables
+//   GET  /api/tables/by-room/:roomId
+//   PATCH /api/tables/:id/status   { status: 'free'|'reserved'|'occupied' }
+//   GET  /api/reservations?from=YYYY-MM-DD&to=YYYY-MM-DD&status=all|pending|...
+//   GET  /api/reservations/:id
+//   POST /api/reservations         { ...NewReservationDto }
+//
+// Se cambi qualcosa nel BE, aggiorna qui le path in un solo punto!
+
+import { inject, Injectable } from '@angular/core';
+import { HttpClient, HttpParams } from '@angular/common/http';
+import { firstValueFrom } from 'rxjs';
+import { API_URL } from '../tokens';
+
+// ---------------------- Tipi Rooms/Tables ----------------------
+
+export interface Room {
+  id: number;
+  name: string;
+  is_active?: 0 | 1 | boolean;
+  sort_order?: number | null;
+}
+
+export type TableStatus = 'free' | 'reserved' | 'occupied';
+
+export interface Table {
+  id: number;
+  room_id: number | null;
+  table_number?: number | null;
+  capacity?: number | null;     // nel BE seats -> capacity
+  status?: TableStatus;
+  label?: string;               // alias "Tavolo <n>" generato dal BE (opzionale)
+  updated_at?: string;          // ISO
+}
+
+// ---------------------- Tipi Reservations ----------------------
+
+export type ReservationStatus = 'pending' | 'accepted' | 'rejected' | 'cancelled';
+
+export interface Reservation {
+  id: number;
+  customer_first?: string | null;
+  customer_last?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  party_size: number;
+  start_at: string;               // ISO (UTC lato BE)
+  end_at: string;                 // ISO (calcolata dal BE)
+  status: ReservationStatus;
+  table_id?: number | null;
+  table_number?: number | null;
+  room_id?: number | null;
+  table_name?: string | null;     // es. "Tavolo 12" (opzionale)
+  notes?: string | null;
+  created_at?: string;            // ISO
+}
+
+// Filtri lista prenotazioni (coerenti col BE)
+export interface ReservationQuery {
+  from?: string;                             // YYYY-MM-DD  (UTC day)
+  to?: string;                               // YYYY-MM-DD
+  status?: ReservationStatus | 'all';        // default: all
+  q?: string;                                // ricerca full-text (nome/tel/email)
+}
+
+// DTO creazione prenotazione
+export interface NewReservationDto {
+  customer_first?: string | null;
+  customer_last?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  party_size: number;
+  start_at: string;               // ISO locale dal FE; BE normalizza/usa regole env
+  end_at?: string | null;         // opzionale: se non presente la calcola il BE
+  notes?: string | null;
+  table_id?: number | null;
+  client_token?: string | null;
+}
+
+// === INIZIO MODIFICA (CountByStatus types) ===
+// ✅ Aggiunto: risposta per conteggi per status (usata nel badge)
+export interface CountByStatusResponse {
+  pending?: number;
+  accepted?: number;
+  rejected?: number;
+  cancelled?: number;
+  total?: number;
+}
+// === FINE MODIFICA ===
+
+@Injectable({ providedIn: 'root' })
+export class ReservationsApi {
+  private http = inject(HttpClient);
+  private base = inject(API_URL); // es. '/api'
+
+  // ---------------------- Reservations ----------------------
+
+  /** Lista prenotazioni con filtri opzionali */
+  list(params: ReservationQuery = {}) {
+    const httpParams = new HttpParams({ fromObject: toStringParams(params) });
+    return this.http.get<Reservation[]>(`${this.base}/reservations`, { params: httpParams });
+  }
+
+  /** Dettaglio prenotazione */
+  byId(id: number) {
+    return this.http.get<Reservation>(`${this.base}/reservations/${id}`);
+  }
+
+  /** Crea prenotazione (ritorna la prenotazione completa dal BE) */
+  async create(dto: NewReservationDto): Promise<Reservation> {
+    return await firstValueFrom(
+      this.http.post<Reservation>(`${this.base}/reservations`, dto)
+    );
+  }
+
+  // ---------------------- Rooms/Tables (supporto UI) ----------------------
+
+  /** Lista sale */
+  listRooms() {
+    return this.http.get<Room[]>(`${this.base}/rooms`);
+  }
+
+  /** Lista TUTTI i tavoli */
+  listTables() {
+    return this.http.get<Table[]>(`${this.base}/tables`);
+  }
+
+  /** Lista tavoli per sala */
+  listTablesByRoom(roomId: number) {
+    return this.http.get<Table[]>(`${this.base}/tables/by-room/${roomId}`);
+  }
+
+  /** Aggiorna lo stato di un tavolo (free|reserved|occupied) */
+  updateTableStatus(id: number, status: TableStatus) {
+    return this.http.patch<{ ok: boolean; id: number; status: TableStatus }>(
+      `${this.base}/tables/${id}/status`,
+      { status }
+    );
+  }
+
+    // === INIZIO MODIFICA (countByStatus) ===
+  // ✅ Aggiunto: chiama il BE per avere il conteggio per status.
+  //    - params.from / params.to: 'YYYY-MM-DD'
+  //    - Ritorna { pending, accepted, rejected, cancelled, total }
+  countByStatus(params: { from?: string; to?: string }) {
+    const httpParams = new HttpParams({ fromObject: cleanParams(params) });
+    return this.http.get<CountByStatusResponse>(`${this.base}/reservations/count-by-status`, {
+      params: httpParams
+    });
+  }
+  // === FINE MODIFICA ===
+
+}
+
+
+
+// Helper piccolo: toglie undefined/null
+function cleanParams<T extends Record<string, any>>(p: T): Record<string, string> {
+  const out: Record<string, string> = {};
+  Object.keys(p || {}).forEach(k => {
+    const v = (p as any)[k];
+    if (v !== undefined && v !== null && String(v).trim() !== '') out[k] = String(v);
+  });
+  return out;
+}
+
+// Converte i filtri in stringhe per HttpParams (ignora vuoti/"all")
+function toStringParams(q: ReservationQuery): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (q.from) out['from'] = String(q.from);
+  if (q.to) out['to'] = String(q.to);
+  if (q.status && q.status !== 'all') out['status'] = String(q.status);
+  if (q.q) out['q'] = String(q.q);
+  return out;
+}
+
+
+
+🔍 CHECK rapidi (contentId, ion-menu, RouterLink, IonIcon registrati)
+  - contentId in shell.page.html:
+19:<ion-split-pane when="(min-width: 992px)" contentId="main-content">
+21:  <ion-menu contentId="main-content" type="overlay">
+49:  <!-- AREA CONTENUTI (deve avere lo stesso id di contentId sopra) -->
+
+  - ion-menu in shell.page.html:
+6:      <ion-menu-button [autoHide]="false"></ion-menu-button>
+21:  <ion-menu contentId="main-content" type="overlay">
+32:        <ion-menu-toggle [autoHide]="false" *ngFor="let item of items">
+
+  - routerLink in shell.page.html:
+33:          <ion-item button [routerLink]="item.path" routerLinkActive="ion-activated">
+
+  - IonIcon registrazioni (addIcons) in main.ts/shell.page.ts:
+
+✅ FINE DUMP

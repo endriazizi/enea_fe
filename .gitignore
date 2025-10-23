@@ -1,0 +1,96 @@
+# =========================
+# Node / Package Managers
+# =========================
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+bun.lockb
+*.log
+logs/
+*.pid
+*.seed
+*.pid.lock
+
+# ================
+# Angular / Ionic
+# ================
+dist/
+www/                 # output Ionic/Angular (Ionic usa www)
+.angular/
+.angular/cache/
+.ionic/
+coverage/
+.sass-cache/
+.tmp/
+tmp/
+temp/
+.cache/
+.eslintcache
+*.tgz
+
+# Storybook (se usato)
+storybook-static/
+
+# =========================
+# Capacitor (piattaforme native)
+# =========================
+android/
+ios/
+
+# =========================
+# Env & configurazioni local
+# =========================
+.env
+.env.*
+!.env.example
+*.local
+*.local.*
+# Varianti Angular di env locali (se usi file "local" non tracciati)
+src/environments/environment.local.ts
+src/environments/environment.*.local.ts
+
+# =========================
+# IDE / Editor / OS
+# =========================
+# VS Code: manteniamo la cartella ma escludiamo file sensibili
+!.vscode/
+.vscode/*.secrets.json
+.vscode/*.private.json
+
+# JetBrains / IntelliJ
+.idea/
+*.iml
+
+# Sistemi operativi
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Icon?
+Desktop.ini
+$RECYCLE.BIN/
+*.swp
+*.swo
+*.orig
+
+# =========================
+# Test / E2E (se usati)
+# =========================
+# Cypress
+cypress/screenshots/
+cypress/videos/
+.cypress-cache/
+# Playwright
+playwright-report/
+test-results/
+.playwright/
+
+# =========================
+# Export/backup locali
+# =========================
+exports/
+export/
+*.bak
+*.backup
+*~

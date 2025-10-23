@@ -1,0 +1,27 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-title>Azioni stato</ion-title>
+    <ion-buttons slot="end">
+         <ion-button (click)="onConfirm()">Conferma</ion-button> <!-- 👈 aggiunto qui -->
+      <ion-button (click)="close()">Chiudi</ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="ion-padding">
+  <ion-list>
+    <ion-item><ion-label>Nuovo stato</ion-label></ion-item>
+    <ion-radio-group [(ngModel)]="action">
+      <ion-item><ion-label>Accetta</ion-label><ion-radio value="accept"/></ion-item>
+      <ion-item><ion-label>Rifiuta</ion-label><ion-radio value="reject"/></ion-item>
+      <ion-item><ion-label>Annulla</ion-label><ion-radio value="cancel"/></ion-item>
+    </ion-radio-group>
+  </ion-list>
+
+  <ion-item>
+    <ion-label position="stacked">Motivo (obbligatorio per Rifiuta/Annulla)</ion-label>
+    <ion-textarea [(ngModel)]="reason" placeholder="Motivo..." autoGrow="true"></ion-textarea>
+  </ion-item>
+</ion-content>
+
+

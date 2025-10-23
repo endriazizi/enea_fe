@@ -1,0 +1,15 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Angular: serve + Chrome (debug)",
+      "type": "pwa-chrome",
+      "request": "launch",
+      "url": "http://localhost:8100",
+      "webRoot": "${workspaceFolder}",
+      "preLaunchTask": "Angular: serve",
+      "sourceMaps": true,
+      "skipFiles": ["<node_internals>/**"]
+    }
+  ]
+}

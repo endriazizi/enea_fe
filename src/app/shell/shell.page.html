@@ -1,0 +1,56 @@
+<!-- Header superiore -->
+<ion-header>
+  <ion-toolbar>
+    <!-- 🔧 In desktop vogliamo vedere SEMPRE l’hamburger -->
+    <ion-buttons slot="start">
+      <ion-menu-button [autoHide]="false"></ion-menu-button>
+    </ion-buttons>
+
+    <ion-title>Admin</ion-title>
+
+    <ion-buttons slot="end">
+      <ion-button (click)="onLogout()">Logout</ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<!-- Layout a due colonne: menu a sinistra, contenuti a destra -->
+<!-- when="(min-width: 992px)" => da 992px in su il menu resta sempre visibile -->
+<ion-split-pane when="(min-width: 992px)" contentId="main-content">
+  <!-- SIDEMENU -->
+  <ion-menu contentId="main-content" type="overlay">
+    <ion-header>
+      <ion-toolbar>
+        <ion-title>Menu</ion-title>
+      </ion-toolbar>
+    </ion-header>
+
+    <ion-content>
+      <ion-list>
+        <!-- 🧠 TRUCCO: [autoHide]="false"
+             Se lasci auto-hide="true", in split-pane (desktop) gli item si nascondono! -->
+        <ion-menu-toggle [autoHide]="false" *ngFor="let item of items">
+          <ion-item button [routerLink]="item.path" routerLinkActive="ion-activated">
+            <!-- Le icone appaiono se sono state registrate (vedi icons.ts) -->
+            <ion-icon slot="start" *ngIf="item.icon" [name]="item.icon"></ion-icon>
+            <ion-label>{{ item.label }}</ion-label>
+                        <!-- === INIZIO MODIFICA (badge "In attesa") === -->
+            <!-- ✅ Aggiunto: se la voce è la lista prenotazioni (item.badge true) mostro il badge -->
+
+              <ion-badge *ngIf="item.badge && pendingToday() >= 0" slot="end" color="warning">
+              {{ pendingToday() }}
+            </ion-badge>
+            <!-- === FINE MODIFICA === -->
+          </ion-item>
+        </ion-menu-toggle>
+      </ion-list>
+    </ion-content>
+  </ion-menu>
+
+  <!-- AREA CONTENUTI (deve avere lo stesso id di contentId sopra) -->
+  <ion-content id="main-content">
+    <!-- PRIMA: <router-outlet></router-outlet> -->
+    <!-- DOPO: -->
+    <ion-router-outlet></ion-router-outlet>
+  </ion-content>
+</ion-split-pane>

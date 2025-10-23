@@ -1,0 +1,12 @@
+<!-- Menù laterale: semplice e leggibile -->
+<ion-content>
+  <ion-list>
+    <!-- IMPORTANTE: qui *ngFor funziona perché NgFor è importato nel componente -->
+    <ion-menu-toggle auto-hide="true" *ngFor="let item of items">
+      <ion-item button [routerLink]="item.path" routerLinkActive="ion-activated">
+        <ion-icon slot="start" *ngIf="item.icon" [name]="item.icon"></ion-icon>
+        <ion-label>{{ item.label }}</ion-label>
+      </ion-item>
+    </ion-menu-toggle>
+  </ion-list>
+</ion-content>

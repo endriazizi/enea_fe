@@ -1,0 +1,27 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Angular: serve",
+      "type": "shell",
+      "command": "ng",
+      "args": [
+        "serve",
+        "--port", "8100",
+        "--proxy-config", "proxy.conf.json"
+      ],
+      "options": {
+        "cwd": "${workspaceFolder}"
+      },
+      "isBackground": true,
+      "problemMatcher": {
+        "base": "$tsc-watch",
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".*(Application bundle generation complete|Compiling|Watch mode enabled).*",
+          "endsPattern": ".*Local:\\s*http://localhost:8100/.*"
+        }
+      }
+    }
+  ]
+}

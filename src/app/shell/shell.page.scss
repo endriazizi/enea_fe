@@ -1,0 +1,12 @@
+/* Evidenzia la voce attiva in lista */
+ion-item.ion-activated {
+  --background: rgba(56, 128, 255, 0.12);
+}
+
+/* (Se avevi regole “mobile-only” che nascondevano l’hamburger su desktop, rimuovile) */
+/*
+.mobile-only { display: none; }
+@media (max-width: 991px) {
+  .mobile-only { display: flex; }
+}
+*/

@@ -1,6 +1,6 @@
 export const environment = {
   production: false,
-  apiUrl: '/api',
+  apiBaseUrl: '/api',
   devLogin: {
     enabled: true,
     email: 'admin@demo.it',

@@ -6,10 +6,7 @@
     "admin-pwa": {
       "projectType": "application",
       "schematics": {
-        "@schematics/angular:component": {
-          "style": "scss",
-          "standalone": true
-        }
+        "@schematics/angular:component": { "style": "scss", "standalone": true }
       },
       "root": "",
       "sourceRoot": "src",
@@ -18,6 +15,7 @@
         "build": {
           "builder": "@angular/build:application",
           "options": {
+            "outputPath": "dist/admin-pwa",
             "index": "src/index.html",
             "browser": "src/main.ts",
             "polyfills": ["zone.js"],
@@ -34,9 +32,17 @@
                 { "type": "initial", "maximumWarning": "1.5MB", "maximumError": "2MB" },
                 { "type": "anyComponentStyle", "maximumWarning": "6kB", "maximumError": "10kB" }
               ],
-              "outputHashing": "all"
-              /* ⚠️ NIENTE serviceWorker/ngswConfigPath qui.
-                 Il SW è gestito in app.config.ts con provideServiceWorker(). */
+              "outputHashing": "all",
+              "optimization": true,
+              "sourceMap": false,
+              "extractLicenses": true,
+              "fileReplacements": [
+                {
+                  "replace": "src/app/environments/environment.ts",
+                  "with": "src/app/environments/environment.prod.ts"
+                }
+              ],
+              "serviceWorker": "ngsw-config.json"
             },
             "development": {
               "optimization": false,
@@ -48,23 +54,14 @@
         },
         "serve": {
           "builder": "@angular/build:dev-server",
-          "options": {
-            "proxyConfig": "proxy.conf.json",
-            "open": true
-          },
+          "options": { "proxyConfig": "proxy.conf.json", "open": true },
           "configurations": {
-            "production": {
-              "buildTarget": "admin-pwa:build:production"
-            },
-            "development": {
-              "buildTarget": "admin-pwa:build:development"
-            }
+            "production": { "buildTarget": "admin-pwa:build:production" },
+            "development": { "buildTarget": "admin-pwa:build:development" }
           },
           "defaultConfiguration": "development"
         },
-        "extract-i18n": {
-          "builder": "@angular/build:extract-i18n"
-        },
+        "extract-i18n": { "builder": "@angular/build:extract-i18n" },
         "test": {
           "builder": "@angular/build:karma",
           "options": {

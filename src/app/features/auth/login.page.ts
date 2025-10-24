@@ -20,7 +20,7 @@ import { HttpClient } from '@angular/common/http';
 
 // 🔗 ATTENZIONE al path: da features/auth a environments è ../../../
 // Se la tua struttura differisce, adegua il percorso di import.
-import { environment } from '../../../environments/environment';
+import { environment } from '../../environments/environment';
 
 @Component({
   standalone: true,

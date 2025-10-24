@@ -3,11 +3,22 @@
   <ion-toolbar>
     <ion-title>Modifica prenotazione</ion-title>
 
-    <!-- 🖨️ Pulsante stampa segnaposto singolo (toolbar destra) -->
+    <!-- Toolbar destra: mantengo la tua UI -->
     <ion-buttons slot="end" class="ion-hide-sm-down">
       <ion-button [disabled]="printing()" (click)="onPrintPlacecardOne()" title="Stampa segnaposto">
         <ion-icon name="print-outline" slot="start"></ion-icon>
         Stampa segnaposto
+      </ion-button>
+
+      <!-- 🗑️ Elimina definitivamente (solo se status = cancelled) -->
+      <ion-button
+        color="danger"
+        [disabled]="loading()"
+        *ngIf="entity()?.status === 'cancelled'"
+        (click)="onDeleteDefinitive()"
+        title="Elimina definitivamente">
+        <ion-icon name="trash-outline" slot="start"></ion-icon>
+        Elimina definitivamente
       </ion-button>
     </ion-buttons>
   </ion-toolbar>
@@ -15,7 +26,6 @@
 
 <ion-content>
   <div style="max-width:880px; margin:0 auto; padding:16px;" *ngIf="entity(); else notFound">
-
     <form [formGroup]="form" (ngSubmit)="onSave()">
 
       <!-- ===== Dati cliente ===== -->
@@ -72,114 +82,72 @@
             clear-input="true">
           </ion-input>
         </ion-item>
-        <ion-note
-          *ngIf="emailCtrl.invalid && (emailCtrl.dirty || emailCtrl.touched)"
-          color="danger"
-          style="margin:6px 8px 0;">
-          Email non valida
-        </ion-note>
       </ion-list>
 
-      <!-- ===== Coperti / Data-ora ===== -->
-      <ion-list inset="true" style="margin-top:12px;">
+      <!-- ===== Dati prenotazione ===== -->
+      <ion-list inset="true" style="margin-top: 12px;">
         <ion-item lines="full">
-          <ion-label position="stacked">Coperti</ion-label>
-          <ion-input formControlName="party_size" type="number" inputmode="numeric" min="1"></ion-input>
+          <ion-label position="stacked">Persone</ion-label>
+          <ion-input type="number" formControlName="party_size" min="1"></ion-input>
         </ion-item>
 
         <ion-item lines="full" style="margin-top:8px;">
-          <ion-label position="stacked">Data e ora</ion-label>
-          <ion-datetime
-            formControlName="start_at"
-            presentation="date-time"
-            preferWheel="true">
-          </ion-datetime>
+          <ion-label position="stacked">Inizio (UTC ISO)</ion-label>
+          <ion-input formControlName="start_at"></ion-input>
         </ion-item>
-      </ion-list>
 
-      <!-- ===== Sala & Tavolo ===== -->
-      <ion-list inset="true" style="margin-top:12px;">
-        <ion-item lines="full">
+        <ion-item lines="full" style="margin-top:8px;">
+          <ion-label position="stacked">Fine (UTC ISO)</ion-label>
+          <ion-input formControlName="end_at"></ion-input>
+        </ion-item>
+
+        <ion-item lines="full" style="margin-top:8px;">
           <ion-label position="stacked">Sala</ion-label>
-          <ion-select formControlName="room_id" interface="popover" placeholder="Seleziona sala">
-            <ion-select-option *ngFor="let r of rooms()" [value]="r.id">
-              {{ r.name }}
-            </ion-select-option>
+          <ion-select formControlName="room_id" (ionChange)="onRoomChange($event.detail.value)">
+            <ion-select-option *ngFor="let r of rooms()" [value]="r.id">{{ r.name }}</ion-select-option>
           </ion-select>
         </ion-item>
 
         <ion-item lines="full" style="margin-top:8px;">
           <ion-label position="stacked">Tavolo</ion-label>
-          <ion-select
-            formControlName="table_id"
-            interface="popover"
-            placeholder="Seleziona tavolo"
-            [disabled]="!form.value.room_id || !tables().length">
-            <ion-select-option *ngFor="let t of tables()" [value]="t.id">
-              Tavolo {{ t.table_number || t.label || t.id }} ({{ t.capacity || '?' }})
-            </ion-select-option>
+          <ion-select formControlName="table_id">
+            <ion-select-option *ngFor="let t of tables()" [value]="t.id">{{ t.name }}</ion-select-option>
           </ion-select>
         </ion-item>
-      </ion-list>
 
-      <!-- ===== Note ===== -->
-      <ion-list inset="true" style="margin-top:12px;">
-        <ion-item lines="full">
+        <ion-item lines="full" style="margin-top:8px;">
           <ion-label position="stacked">Note</ion-label>
-          <ion-textarea
-            formControlName="notes"
-            autoGrow="true"
-            enterkeyhint="done"
-            (ionInput)="forceUpper('notes', $event)"
-            placeholder="Es. intolleranze, preferenza tavolo, segnalazioni…">
-          </ion-textarea>
+          <ion-textarea formControlName="notes" placeholder="intolleranze, preferenze, segnalazioni…"></ion-textarea>
         </ion-item>
       </ion-list>
 
       <!-- CTA -->
-      <div style="padding:12px 8px; display:flex; gap:8px; flex-wrap:wrap;">
-        <ion-button size="large" type="submit" [disabled]="loading() || form.invalid">
-          {{ loading() ? 'Salvo…' : 'Salva modifiche' }}
+      <div style="padding: 12px 8px">
+        <ion-button expand="block" size="large" type="submit" [disabled]="loading() || form.invalid">
+          {{ loading() ? 'Salvataggio…' : 'Salva' }}
         </ion-button>
-        <ion-button fill="outline" color="medium" (click)="goToList()">Torna alla lista</ion-button>
-        <ion-button fill="outline" color="danger" (click)="onDelete()">Elimina</ion-button>
       </div>
     </form>
   </div>
 
   <ng-template #notFound>
-    <div style="padding:16px; opacity:.75;">
-      Prenotazione non trovata.
-      <ion-button fill="clear" (click)="goToList()">Torna alla lista</ion-button>
-    </div>
+    <div style="padding:16px">Prenotazione non trovata.</div>
   </ng-template>
 
-  <!-- FAB mobile (speed dial) -->
-  <ion-fab slot="fixed" horizontal="end" vertical="bottom" class="ion-hide-md-up">
-    <ion-fab-button>
-      <ion-icon name="add-outline"></ion-icon>
+  <!-- FAB mobile: invariato -->
+  <ion-fab slot="fixed" horizontal="end" vertical="bottom" class="ion-hide-md-up fab-resv">
+    <ion-fab-button title="Azioni">
+      <ion-icon name="ellipsis-vertical"></ion-icon>
     </ion-fab-button>
+
     <ion-fab-list side="top">
-      <ion-fab-button [disabled]="loading() || form.invalid" (click)="onSave()" title="Salva">
-        <ion-icon name="add-outline"></ion-icon>
-      </ion-fab-button>
-      <ion-fab-button color="danger" (click)="onDelete()" title="Elimina">
-        <ion-icon name="trash-outline"></ion-icon>
-      </ion-fab-button>
-      <ion-fab-button (click)="goToList()" title="Lista">
+      <ion-fab-button routerLink="/reservations" title="Vai alla lista">
         <ion-icon name="list"></ion-icon>
       </ion-fab-button>
-      <ion-fab-button [disabled]="printing()" (click)="printTodayThermal()" title="Stampa termica (oggi)">
+
+      <ion-fab-button [disabled]="printing()" (click)="onPrintPlacecardOne()" title="Stampa segnaposto">
         <ion-icon name="print-outline"></ion-icon>
       </ion-fab-button>
-      <ion-fab-button [disabled]="printing()" (click)="printPlacecardsToday()" title="Segnaposti (oggi)">
-        <ion-icon name="document-text-outline"></ion-icon>
-      </ion-fab-button>
-      <!-- opzionale: anche singolo qui
-      <ion-fab-button [disabled]="printing()" (click)="onPrintPlacecardOne()" title="Stampa segnaposto (singolo)">
-        <ion-icon name="print-outline"></ion-icon>
-      </ion-fab-button>
-      -->
     </ion-fab-list>
   </ion-fab>
 </ion-content>

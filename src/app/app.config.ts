@@ -61,7 +61,9 @@ export const appConfig: ApplicationConfig = {
     provideIonicAngular(),
     { provide: LOCALE_ID, useValue: 'it-IT' },
     provideHttpClient(withInterceptors([authInterceptor, apiErrorInterceptor])),
-    { provide: API_URL, useValue: environment.apiUrl },
+    // { provide: API_URL, useValue: environment.apiBaseUrl },
+    { provide: API_URL, useValue: environment.apiBaseUrl },
+    
     {
       provide: APP_INITIALIZER,
       useFactory: (auth: AuthService) => () => auth.init(),

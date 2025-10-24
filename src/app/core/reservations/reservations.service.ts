@@ -1,38 +1,17 @@
 // src/app/core/reservations/reservations.service.ts
-//
-// Service unico per:
-//  - Prenotazioni (list/byId/create/update/delete, status, stampa)
-//  - Supporto UI: Rooms e Tables (lista, per sala, cambio stato)
-//
-// Stile: commenti lunghi, tipi chiari, niente sorprese.
+// ============================================================================
+// Service FE - Prenotazioni
+// - Aggiunta hard delete: remove(id,{force?,notify?})
+// - Compat: updateStatus(id, action, reason?) e printDaily({date,status})
+// - Supporto lookup: listRooms(), listTablesByRoom(roomId)
+// - FIX typing: Table.label / Table.capacity, Reservation.table_number / table_name
+// - 🔧 CHANGED: endpoint fallback (/reservations/* -> /rooms, /tables/by-room) + unwrap di updateStatus
+// ============================================================================
 
-import { inject, Injectable } from '@angular/core';
+import { Injectable, inject, Inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { firstValueFrom } from 'rxjs';
+import { Observable, map, catchError, of } from 'rxjs'; // 🔧 CHANGED: import catchError, of
 import { API_URL } from '../tokens';
-
-// ---------------------- Tipi Rooms/Tables ----------------------
-
-export interface Room {
-  id: number;
-  name: string;
-  is_active?: 0 | 1 | boolean;
-  sort_order?: number | null;
-}
-
-export type TableStatus = 'free' | 'reserved' | 'occupied';
-
-export interface Table {
-  id: number;
-  room_id: number | null;
-  table_number?: number | null;
-  capacity?: number | null;     // nel BE seats -> capacity
-  status?: TableStatus;
-  label?: string;               // alias "Tavolo <n>" generato dal BE (opzionale)
-  updated_at?: string;          // ISO
-}
-
-// ---------------------- Tipi Reservations ----------------------
 
 export type ReservationStatus = 'pending' | 'accepted' | 'rejected' | 'cancelled';
 
@@ -40,185 +19,189 @@ export interface Reservation {
   id: number;
   customer_first?: string | null;
   customer_last?: string | null;
+  display_name?: string | null;
   phone?: string | null;
   email?: string | null;
   party_size: number;
-  start_at: string;               // ISO (UTC lato BE)
-  end_at: string;                 // ISO (calcolata dal BE)
-  status: ReservationStatus;
-  table_id?: number | null;
-  table_number?: number | null;
+  start_at: string;           // ISO
+  end_at?: string | null;     // ISO
   room_id?: number | null;
-  table_name?: string | null;     // es. "Tavolo 12" (opzionale)
-  notes?: string | null;
-  created_at?: string;            // ISO
-}
-
-// Filtri lista prenotazioni
-export interface ReservationQuery {
-  from?: string;                             // YYYY-MM-DD
-  to?: string;                               // YYYY-MM-DD
-  status?: ReservationStatus | 'all';        // default all
-  q?: string;                                // ricerca full-text
-}
-
-// DTO creazione
-export interface NewReservationDto {
-  customer_first?: string | null;
-  customer_last?: string | null;
-  phone?: string | null;
-  email?: string | null;
-  party_size: number;
-  start_at: string;               // ISO locale dal FE; BE normalizza/usa regole env
-  end_at?: string | null;         // opzionale
-  notes?: string | null;
   table_id?: number | null;
-  client_token?: string | null;
+  status: ReservationStatus;
+  notes?: string | null;
+  created_at?: string;
+  updated_at?: string;
+
+  // 🔧 aggiunte per compat con template/lista
+  table_number?: number | null;
+  table_name?: string | null;
 }
 
-// ✅ DTO update (parziale)
-export type UpdateReservationDto = Partial<NewReservationDto> & {
-  party_size?: number;
-  start_at?: string;
-};
+export interface Room { id: number; name: string; }
 
-// ✅ Conteggi per status
-export interface CountByStatusResponse {
-  pending?: number;
-  accepted?: number;
-  rejected?: number;
-  cancelled?: number;
-  total?: number;
-};
+export interface Table {
+  id: number;
+  room_id?: number;
+  table_number?: number;
+  seats?: number;
 
-// Stato → azioni
-export type ReservationAction = 'accept' | 'reject' | 'cancel';
+  // 🔧 aggiunte per compat con template nuova prenotazione
+  name?: string;             // se il BE la espone già
+  label?: string | null;     // alias usato dal template (fallback computed)
+  capacity?: number | null;  // alias di seats per il template
+}
+
+export interface ListFilter {
+  from?: string; // YYYY-MM-DD
+  to?: string;   // YYYY-MM-DD
+  status?: ReservationStatus | 'all';
+  q?: string;
+}
+
+export interface CountByStatusRes {
+  pending: number;
+  accepted: number;
+  rejected: number;
+  cancelled: number;
+}
+
+export type StatusAction = 'accept' | 'reject' | 'cancel' | 'restore';
+export interface StatusChangeBody {
+  action: StatusAction;
+  reason?: string;
+  notify?: boolean;
+  email?: string;
+  reply_to?: string;
+  whatsapp?: boolean;
+}
 
 @Injectable({ providedIn: 'root' })
 export class ReservationsApi {
   private http = inject(HttpClient);
-  private base = inject(API_URL); // es. '/api'
+  constructor(@Inject(API_URL) private baseUrl: string) {}
 
-  // ---------------------- Reservations ----------------------
+  // -------------------- Helpers ---------------------------------------------
 
-  /** Lista prenotazioni con filtri opzionali */
-  list(params: ReservationQuery = {}) {
-    const httpParams = new HttpParams({ fromObject: toStringParams(params) });
-    return this.http.get<Reservation[]>(`${this.base}/reservations`, { params: httpParams });
-  }
-
-  /** Dettaglio prenotazione */
-  byId(id: number) {
-    return this.http.get<Reservation>(`${this.base}/reservations/${id}`);
-  }
-
-  /** Crea prenotazione */
-  async create(dto: NewReservationDto): Promise<Reservation> {
-    return await firstValueFrom(
-      this.http.post<Reservation>(`${this.base}/reservations`, dto)
-    );
-  }
-
-  /** ✅ Aggiorna prenotazione (PATCH) */
-  async update(id: number, dto: UpdateReservationDto): Promise<Reservation> {
-    return await firstValueFrom(
-      this.http.patch<Reservation>(`${this.base}/reservations/${id}`, dto)
-    );
-  }
-
-  /** ✅ Elimina prenotazione (DELETE) */
-  async remove(id: number): Promise<{ ok: boolean }> {
-    return await firstValueFrom(
-      this.http.delete<{ ok: boolean }>(`${this.base}/reservations/${id}`)
-    );
-  }
-
-  // ---------------------- Rooms/Tables (supporto UI) ----------------------
-
-  /** Lista sale (separate API /rooms) */
-  listRooms() {
-    return this.http.get<Room[]>(`${this.base}/rooms`);
-  }
-
-  /** Lista TUTTI i tavoli (se hai questa rotta separata) */
-  listTables() {
-    return this.http.get<Table[]>(`${this.base}/tables`);
-  }
-
-  /** Lista tavoli per sala */
-  listTablesByRoom(roomId: number) {
-    return this.http.get<Table[]>(`${this.base}/tables/by-room/${roomId}`);
-  }
-
-  /** Aggiorna lo stato di un tavolo (free|reserved|occupied) */
-  updateTableStatus(id: number, status: TableStatus) {
-    return this.http.patch<{ ok: boolean; id: number; status: TableStatus }>(
-      `${this.base}/tables/${id}/status`,
-      { status }
-    );
-  }
-
-  // ---------------------- Stato + Stampa ------------------------------------
-
-  /** Cambia stato prenotazione (accept|reject|cancel) */
-  updateStatus(id: number, action: ReservationAction, reason?: string) {
-    const url = `${this.base}/reservations/${id}/status`;
-    return this.http.put<{ ok: boolean; reservation: any }>(url, { action, reason });
-  }
-
-  /** Stampa riepilogo giornaliero (termica) */
-  printDaily(payload: { date?: string; status?: string } = {}) {
-    return this.http.post<{ ok: boolean; job_id?: string; printed_count?: number }>(
-      `${this.base}/reservations/print/daily`,
-      payload
-    );
-  }
-
-  /** Stampa segnaposti (uno per prenotazione) */
-  printPlacecards(date: string, status: string = 'accepted', qrBaseUrl?: string) {
-    return this.http.post(
-      `${this.base}/reservations/print/placecards`,
-      { date, status, qr_base_url: qrBaseUrl }
-    );
-  }
-
-  /** 🖨️ Stampa segnaposto singolo della prenotazione indicata */
-  printPlacecardOne(id: number) {
-    // body vuoto by design; se il BE prevede opzioni, aggiungile qui
-    return this.http.post<{ ok?: boolean; printed_count?: number }>(
-      `${this.base}/reservations/${id}/print/placecard`,
-      {}
-    );
-  }
-
-  /** Conteggio per status nel range */
-  countByStatus(params: { from?: string; to?: string }) {
-    const httpParams = new HttpParams({ fromObject: cleanParams(params) });
-    return this.http.get<CountByStatusResponse>(
-      `${this.base}/reservations/support/count-by-status`,
-      { params: httpParams }
-    );
-  }
-}
-
-// ---------------------- Helpers ---------------------------------------------
-
-// pulisce undefined/null
-function cleanParams<T extends Record<string, any>>(p: T): Record<string, string> {
-  const out: Record<string, string> = {};
-  Object.keys(p || {}).forEach(k => {
-    const v = (p as any)[k];
-    if (v !== undefined && v !== null && String(v).trim() !== '') out[k] = String(v);
+  private enrichTable = (t: Table): Table => ({
+    ...t,
+    label: t.label ?? t.name ?? (t.table_number != null ? `Tavolo ${t.table_number}` : null),
+    capacity: t.capacity ?? (t.seats != null ? Number(t.seats) : null),
   });
-  return out;
-}
 
-// Converte i filtri in stringhe per HttpParams (ignora vuoti/"all")
-function toStringParams(q: ReservationQuery): Record<string, string> {
-  const out: Record<string, string> = {};
-  if (q.from) out['from'] = String(q.from);
-  if (q.to) out['to'] = String(q.to);
-  if (q.status && q.status !== 'all') out['status'] = String(q.status);
-  if (q.q) out['q'] = String(q.q);
-  return out;
+  // -------------------- CRUD ------------------------------------------------
+
+  list(filter: ListFilter): Observable<Reservation[]> {
+    let params = new HttpParams();
+    if (filter.from)   params = params.set('from', filter.from);
+    if (filter.to)     params = params.set('to', filter.to);
+    if (filter.status && filter.status !== 'all') params = params.set('status', filter.status);
+    if (filter.q)      params = params.set('q', filter.q);
+    return this.http.get<Reservation[]>(`${this.baseUrl}/reservations`, { params });
+  }
+
+  byId(id: number): Observable<Reservation> {
+    return this.http.get<Reservation>(`${this.baseUrl}/reservations/${id}`);
+  }
+
+  create(dto: Partial<Reservation>): Observable<Reservation> {
+    return this.http.post<Reservation>(`${this.baseUrl}/reservations`, dto);
+  }
+
+  update(id: number, dto: Partial<Reservation>): Observable<Reservation> {
+    return this.http.put<Reservation>(`${this.baseUrl}/reservations/${id}`, dto);
+  }
+
+  /** 🗑️ Hard delete — supporta ?force=&notify= */
+  remove(id: number, opts?: { force?: boolean; notify?: boolean }): Observable<{ ok: boolean }> {
+    let params = new HttpParams();
+    if (opts?.force !== undefined)  params = params.set('force',  String(!!opts.force));
+    if (opts?.notify !== undefined) params = params.set('notify', String(!!opts.notify));
+    return this.http.delete<{ ok: boolean }>(`${this.baseUrl}/reservations/${id}`, { params });
+  }
+
+  // -------------------- Stato & Notifiche -----------------------------------
+
+  // Compat: nuovo + legacy
+  updateStatus(id: number, body: StatusChangeBody): Observable<Reservation>;
+  updateStatus(id: number, action: StatusAction, reason?: string): Observable<Reservation>;
+  updateStatus(id: number, a: any, b?: any): Observable<Reservation> {
+    const payload = typeof a === 'string' ? { action: a, reason: b } : a;
+    // 🔧 CHANGED: alcuni BE ritornano { ok, reservation }, altri l'oggetto direttamente → unwrap
+    return this.http
+      .put<any>(`${this.baseUrl}/reservations/${id}/status`, payload)
+      .pipe(map(res => (res?.reservation ?? res) as Reservation));
+  }
+
+  rejectAndNotify(
+    id: number,
+    reason: string,
+    extra?: { email?: string; reply_to?: string; whatsapp?: boolean }
+  ): Observable<{ ok: boolean }> {
+    return this.http.post<{ ok: boolean }>(`${this.baseUrl}/reservations/${id}/reject-notify`, {
+      reason, ...extra
+    });
+  }
+
+  // -------------------- Stampe ----------------------------------------------
+
+  /** Compat: printDaily({date,status}) o printDaily(date, status) */
+  printDaily(arg1: any, maybeStatus?: ReservationStatus | 'all') {
+    const payload = typeof arg1 === 'string'
+      ? { date: arg1, status: (maybeStatus || 'all') }
+      : arg1;
+    return this.http.post(`${this.baseUrl}/reservations/print/daily`, payload)
+      .pipe(map(() => ({ ok: true })));
+  }
+
+  printPlacecards(date: string, status: ReservationStatus | 'all' = 'accepted') {
+    return this.http.post(`${this.baseUrl}/reservations/print/placecards`, { date, status })
+      .pipe(map(() => ({ ok: true })));
+  }
+
+  printPlacecardOne(id: number) {
+    return this.http.post(`${this.baseUrl}/reservations/${id}/print/placecard`, {})
+      .pipe(map(() => ({ ok: true })));
+  }
+
+  // -------------------- Supporto UI / Lookup --------------------------------
+
+  listRooms(): Observable<Room[]> {
+    // 🔧 CHANGED: endpoint primario /reservations/rooms con fallback su /rooms
+    const primary = this.http.get<Room[]>(`${this.baseUrl}/reservations/rooms`);
+    const fallback = () => this.http.get<Room[]>(`${this.baseUrl}/rooms`);
+    return primary.pipe(catchError(() => fallback()));
+  }
+
+  listTablesByRoom(roomId: number): Observable<Table[]> {
+    // 🔧 CHANGED: endpoint primario /reservations/support/tables/by-room/:id con fallback /tables/by-room/:id
+    const primary = this.http.get<Table[]>(`${this.baseUrl}/reservations/support/tables/by-room/${roomId}`);
+    const fallback = () => this.http.get<Table[]>(`${this.baseUrl}/tables/by-room/${roomId}`);
+    return primary.pipe(
+      catchError(() => fallback()),
+      map(rows => (rows || []).map(this.enrichTable))
+    );
+  }
+
+  // Alias se altrove già usati
+  rooms(): Observable<Room[]> { return this.listRooms(); }
+
+  tables(roomId?: number): Observable<Table[]> {
+    if (!roomId) {
+      return this.http.get<Table[]>(`${this.baseUrl}/tables`).pipe(
+        map((rows) => (rows || []).map(this.enrichTable))
+      );
+    }
+    const params = new HttpParams().set('room_id', String(roomId));
+    return this.http.get<Table[]>(`${this.baseUrl}/tables`, { params }).pipe(
+      map((rows) => (rows || []).map(this.enrichTable))
+    );
+  }
+
+  countByStatus(params: { from: string; to: string }): Observable<CountByStatusRes> {
+    const p = new HttpParams().set('from', params.from).set('to', params.to);
+    // mantengo l'endpoint che già usi sul BE per compat
+    return this.http.get<CountByStatusRes>(`${this.baseUrl}/reservations/support/count-by-status`, { params: p })
+      // opzionale fallback top-level (se in qualche env è /support/count-by-status)
+      .pipe(catchError(() => this.http.get<CountByStatusRes>(`${this.baseUrl}/support/count-by-status`, { params: p })));
+  }
 }

@@ -179,32 +179,41 @@ export class EditReservationPage implements OnInit, OnDestroy {
     const r = this.entity();
     if (!r) return;
 
+    // 🔧 FIX iOS overlay: NIENTE logica nel handler dell’alert.
+    // Mostro l’alert, attendo il dismiss e SOLO DOPO eseguo l’azione.
     const alert = await this.alert.create({
       header: 'Eliminare definitivamente?',
       message: `Prenotazione #${r.id} — azione irreversibile.`,
+      mode: 'ios', // 🔧 NEW: coerenza look & feel su iPhone
       buttons: [
         { text: 'Annulla', role: 'cancel' },
-        {
-          text: 'Elimina',
-          role: 'destructive',
-          handler: async () => {
-            try {
-              const res = await firstValueFrom(
-                this.api.remove(r.id, { force: this.forceDelete, notify: this.notifyDelete })
-              );
-              if (res?.ok) {
-                (await this.toast.create({ message: 'Eliminata ✅', duration: 1200 })).present();
-                this.router.navigate(['/reservations'], { queryParams: { lastAction: 'deleted' } });
-              } else {
-                (await this.toast.create({ message: 'Eliminazione non eseguita', duration: 1800 })).present();
-              }
-            } catch (err: any) {
-              (await this.toast.create({ message: `Errore eliminazione: ${err?.error?.error || err.message}`, duration: 2600, color: 'danger' })).present();
-            }
-          }
-        }
+        // ⚠️ niente handler qui: gestisco dopo onDidDismiss()
+        { text: 'Elimina', role: 'confirm' }
       ]
     });
     await alert.present();
+
+    const { role } = await alert.onDidDismiss();
+    if (role !== 'confirm') return;
+
+    this.loading.set(true);
+    try {
+      const res = await firstValueFrom(
+        this.api.remove(r.id, { force: this.forceDelete, notify: this.notifyDelete })
+      );
+      if (res?.ok) {
+        (await this.toast.create({ message: 'Eliminata ✅', duration: 1200 })).present();
+        this.router.navigate(['/reservations'], { queryParams: { lastAction: 'deleted' } });
+      } else {
+        (await this.toast.create({ message: 'Eliminazione non eseguita', duration: 1800 })).present();
+      }
+    } catch (err: any) {
+      (await this.toast.create({
+        message: `Errore eliminazione: ${err?.error?.error || err.message}`,
+        duration: 2600, color: 'danger'
+      })).present();
+    } finally {
+      this.loading.set(false);
+    }
   }
 }

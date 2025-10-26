@@ -5,34 +5,46 @@
 // - Compat: updateStatus(id, action, reason?) e printDaily({date,status})
 // - Supporto lookup: listRooms(), listTablesByRoom(roomId)
 // - FIX typing: Table.label / Table.capacity, Reservation.table_number / table_name
+// - Tracciamento (opz.): created_by / updated_by
 // - 🔧 CHANGED: endpoint fallback (/reservations/* -> /rooms, /tables/by-room) + unwrap di updateStatus
 // ============================================================================
 
 import { Injectable, inject, Inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable, map, catchError, of } from 'rxjs'; // 🔧 CHANGED: import catchError, of
+import { Observable, map, catchError } from 'rxjs';
 import { API_URL } from '../tokens';
 
 export type ReservationStatus = 'pending' | 'accepted' | 'rejected' | 'cancelled';
 
 export interface Reservation {
   id: number;
+
+  // anagrafica/contatti (presenti anche in BE)
   customer_first?: string | null;
   customer_last?: string | null;
   display_name?: string | null;
   phone?: string | null;
   email?: string | null;
+
   party_size: number;
   start_at: string;           // ISO
   end_at?: string | null;     // ISO
+
   room_id?: number | null;
   table_id?: number | null;
+
   status: ReservationStatus;
   notes?: string | null;
+
+  // audit/tempi
   created_at?: string;
   updated_at?: string;
 
-  // 🔧 aggiunte per compat con template/lista
+  // opzionale (tracciamento server: strada B)
+  created_by?: string | null;
+  updated_by?: string | null;
+
+  // compat template/lista
   table_number?: number | null;
   table_name?: string | null;
 }
@@ -45,10 +57,10 @@ export interface Table {
   table_number?: number;
   seats?: number;
 
-  // 🔧 aggiunte per compat con template nuova prenotazione
-  name?: string;             // se il BE la espone già
-  label?: string | null;     // alias usato dal template (fallback computed)
-  capacity?: number | null;  // alias di seats per il template
+  // compat UI
+  name?: string;
+  label?: string | null;
+  capacity?: number | null;
 }
 
 export interface ListFilter {
@@ -74,6 +86,9 @@ export interface StatusChangeBody {
   reply_to?: string;
   whatsapp?: boolean;
 }
+
+// DTO comodo per il wizard pubblico (facoltativo; è un alias di Partial<Reservation>)
+export type CreateReservationPayload = Partial<Reservation>;
 
 @Injectable({ providedIn: 'root' })
 export class ReservationsApi {
@@ -103,7 +118,7 @@ export class ReservationsApi {
     return this.http.get<Reservation>(`${this.baseUrl}/reservations/${id}`);
   }
 
-  create(dto: Partial<Reservation>): Observable<Reservation> {
+  create(dto: CreateReservationPayload): Observable<Reservation> {
     return this.http.post<Reservation>(`${this.baseUrl}/reservations`, dto);
   }
 
@@ -126,7 +141,7 @@ export class ReservationsApi {
   updateStatus(id: number, action: StatusAction, reason?: string): Observable<Reservation>;
   updateStatus(id: number, a: any, b?: any): Observable<Reservation> {
     const payload = typeof a === 'string' ? { action: a, reason: b } : a;
-    // 🔧 CHANGED: alcuni BE ritornano { ok, reservation }, altri l'oggetto direttamente → unwrap
+    // alcuni BE ritornano { ok, reservation }, altri l'oggetto direttamente → unwrap
     return this.http
       .put<any>(`${this.baseUrl}/reservations/${id}/status`, payload)
       .pipe(map(res => (res?.reservation ?? res) as Reservation));
@@ -166,14 +181,14 @@ export class ReservationsApi {
   // -------------------- Supporto UI / Lookup --------------------------------
 
   listRooms(): Observable<Room[]> {
-    // 🔧 CHANGED: endpoint primario /reservations/rooms con fallback su /rooms
+    // Endpoints compat: prima provo /reservations/rooms, poi /rooms
     const primary = this.http.get<Room[]>(`${this.baseUrl}/reservations/rooms`);
     const fallback = () => this.http.get<Room[]>(`${this.baseUrl}/rooms`);
     return primary.pipe(catchError(() => fallback()));
   }
 
   listTablesByRoom(roomId: number): Observable<Table[]> {
-    // 🔧 CHANGED: endpoint primario /reservations/support/tables/by-room/:id con fallback /tables/by-room/:id
+    // Endpoints compat: /reservations/support/tables/by-room/:id → fallback /tables/by-room/:id
     const primary = this.http.get<Table[]>(`${this.baseUrl}/reservations/support/tables/by-room/${roomId}`);
     const fallback = () => this.http.get<Table[]>(`${this.baseUrl}/tables/by-room/${roomId}`);
     return primary.pipe(

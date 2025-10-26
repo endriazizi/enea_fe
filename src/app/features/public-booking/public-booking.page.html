@@ -1,0 +1,235 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-title>PRENOTA SUBITO IL TUO TAVOLO !</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true">
+  <div style="max-width:760px;margin:0 auto;padding:12px;">
+
+    <!-- Stepper -->
+    <div style="display:flex;align-items:center;gap:10px;justify-content:space-between;margin:10px 4px 2px;">
+      <div style="display:flex;align-items:center;gap:6px;font-weight:600;">
+        <ion-badge color="danger" *ngIf="step()<=3">1</ion-badge>
+        <ion-badge color="medium" *ngIf="step()>3">1</ion-badge>
+        <span>CONTATTI</span>
+      </div>
+      <div style="height:2px;background:#eee;flex:1;margin:0 8px;"></div>
+      <div style="display:flex;align-items:center;gap:6px;font-weight:600;">
+        <ion-badge color="danger" *ngIf="step()>3 && step()<=8">2</ion-badge>
+        <ion-badge color="medium" *ngIf="step()<=3 || step()>8">2</ion-badge>
+        <span>PRENOTAZIONE</span>
+      </div>
+      <div style="height:2px;background:#eee;flex:1;margin:0 8px;"></div>
+      <div style="display:flex;align-items:center;gap:6px;font-weight:600;">
+        <ion-badge color="danger" *ngIf="step()>8">3</ion-badge>
+        <ion-badge color="medium" *ngIf="step()<=8">3</ion-badge>
+        <span>CONFERMA</span>
+      </div>
+    </div>
+    <ion-progress-bar [value]="progress()"></ion-progress-bar>
+
+    <div style="height:10px;"></div>
+
+    <ion-card>
+      <ion-card-header>
+        <ion-card-title>
+          <ng-container [ngSwitch]="step()">
+            <span *ngSwitchCase="1">Contatti · Nome e Cognome</span>
+            <span *ngSwitchCase="2">Contatti · Telefono</span>
+            <span *ngSwitchCase="3">Contatti · Email</span>
+            <span *ngSwitchCase="4">Prenotazione · Persone</span>
+            <span *ngSwitchCase="5">Prenotazione · Data</span>
+            <span *ngSwitchCase="6">Prenotazione · Orario</span>
+            <span *ngSwitchCase="7">Prenotazione · Motivo</span>
+            <span *ngSwitchCase="8">Prenotazione · Intolleranze</span>
+            <span *ngSwitchDefault>Conferma · Note & Consensi</span>
+          </ng-container>
+        </ion-card-title>
+      </ion-card-header>
+
+      <ion-card-content>
+
+        <!-- STEP 1: Nome + Cognome -->
+        <ng-container *ngIf="step()===1">
+          <ion-item>
+            <ion-label position="stacked">Nome *</ion-label>
+            <ion-input [formControl]="form.controls.customer_first" autocomplete="given-name"></ion-input>
+          </ion-item>
+          <ion-item>
+            <ion-label position="stacked">Cognome *</ion-label>
+            <ion-input [formControl]="form.controls.customer_last" autocomplete="family-name"></ion-input>
+          </ion-item>
+        </ng-container>
+
+        <!-- STEP 2: Telefono -->
+        <ng-container *ngIf="step()===2">
+          <ion-item>
+            <ion-label position="stacked">Prefisso *</ion-label>
+            <ion-select interface="popover" [formControl]="form.controls.phone_cc">
+              <ion-select-option value="+39">🇮🇹 +39</ion-select-option>
+            </ion-select>
+          </ion-item>
+          <ion-item>
+            <ion-label position="stacked">Numero di telefono *</ion-label>
+            <ion-input [formControl]="form.controls.phone_raw" inputmode="numeric" placeholder="es. 3899988888"></ion-input>
+          </ion-item>
+          <ion-note color="medium">Usiamo il tuo numero solo per comunicazioni sulla prenotazione.</ion-note>
+        </ng-container>
+
+        <!-- STEP 3: Email -->
+        <ng-container *ngIf="step()===3">
+          <ion-item>
+            <ion-label position="stacked">Email *</ion-label>
+            <ion-input [formControl]="form.controls.email" type="email" autocomplete="email" placeholder="nome@dominio.it"></ion-input>
+          </ion-item>
+        </ng-container>
+
+        <!-- STEP 4: Persone -->
+        <ng-container *ngIf="step()===4">
+          <ion-item>
+            <ion-label position="stacked">Persone *</ion-label>
+            <ion-input [formControl]="form.controls.party_size" inputmode="numeric" type="number" min="1"></ion-input>
+          </ion-item>
+        </ng-container>
+
+        <!-- STEP 5: Data -->
+        <ng-container *ngIf="step()===5">
+          <ion-item>
+            <ion-label position="stacked">Data *</ion-label>
+            <ion-datetime presentation="date" [formControl]="form.controls.date"></ion-datetime>
+          </ion-item>
+        </ng-container>
+
+        <!-- STEP 6: Orario -->
+        <ng-container *ngIf="step()===6">
+          <ion-item>
+            <ion-label position="stacked">Orario *</ion-label>
+            <ion-select interface="popover" [formControl]="form.controls.time" placeholder="Seleziona…">
+              <ion-select-option *ngFor="let s of slots()" [value]="s">{{ s }}</ion-select-option>
+            </ion-select>
+          </ion-item>
+          <ion-note color="medium">Se non vedi l’orario desiderato, scegli il più vicino e scrivilo nelle note.</ion-note>
+        </ng-container>
+
+        <!-- STEP 7: Motivo (ion-radio-group) -->
+        <ng-container *ngIf="step()===7">
+          <ion-list>
+            <ion-radio-group [value]="form.controls.reason.value"
+                             (ionChange)="form.controls.reason.setValue($event.detail.value)">
+              <ion-item>
+                <ion-label>Cena</ion-label>
+                <ion-radio slot="start" value="Cena"></ion-radio>
+              </ion-item>
+              <ion-item>
+                <ion-label>Compleanno</ion-label>
+                <ion-radio slot="start" value="Compleanno"></ion-radio>
+              </ion-item>
+              <ion-item>
+                <ion-label>In famiglia</ion-label>
+                <ion-radio slot="start" value="In famiglia"></ion-radio>
+              </ion-item>
+              <ion-item>
+                <ion-label>Cena di lavoro</ion-label>
+                <ion-radio slot="start" value="Cena di lavoro"></ion-radio>
+              </ion-item>
+              <ion-item>
+                <ion-label>Cena di coppia</ion-label>
+                <ion-radio slot="start" value="Cena di coppia"></ion-radio>
+              </ion-item>
+            </ion-radio-group>
+          </ion-list>
+        </ng-container>
+
+        <!-- STEP 8: Intolleranze (ion-checkbox) -->
+        <ng-container *ngIf="step()===8">
+          <ion-list>
+            <ion-item>
+              <ion-label>Lattosio</ion-label>
+              <ion-checkbox slot="start"
+                            [checked]="form.value.intolerances?.lattosio"
+                            (ionChange)="toggleIntolerance('lattosio', $event.detail.checked)">
+              </ion-checkbox>
+            </ion-item>
+            <ion-item>
+              <ion-label>Celiachia</ion-label>
+              <ion-checkbox slot="start"
+                            [checked]="form.value.intolerances?.celiaco"
+                            (ionChange)="toggleIntolerance('celiaco', $event.detail.checked)">
+              </ion-checkbox>
+            </ion-item>
+            <ion-item>
+              <ion-label>Arachidi</ion-label>
+              <ion-checkbox slot="start"
+                            [checked]="form.value.intolerances?.arachidi"
+                            (ionChange)="toggleIntolerance('arachidi', $event.detail.checked)">
+              </ion-checkbox>
+            </ion-item>
+          </ion-list>
+        </ng-container>
+
+        <!-- STEP 9: Note + Consensi -->
+        <ng-container *ngIf="step()===9">
+          <ion-item>
+            <ion-label position="stacked">Note / Richieste</ion-label>
+            <ion-textarea [formControl]="form.controls.notes" rows="5" placeholder="Es. passeggino, tavolo vicino finestra…"></ion-textarea>
+          </ion-item>
+
+          <div style="height:8px;"></div>
+
+          <ion-item>
+            <ion-label><b>Autorizzo tutti i trattamenti</b></ion-label>
+            <ion-checkbox slot="start"
+                          [checked]="form.controls.consent_all.value"
+                          (ionChange)="onToggleAllConsents($event.detail.checked)">
+            </ion-checkbox>
+          </ion-item>
+          <ion-item>
+            <ion-label>Marketing e comunicazioni</ion-label>
+            <ion-checkbox slot="start"
+                          [checked]="form.controls.consent_marketing.value"
+                          (ionChange)="form.controls.consent_marketing.setValue($event.detail.checked)">
+            </ion-checkbox>
+          </ion-item>
+          <ion-item>
+            <ion-label>Profilazione</ion-label>
+            <ion-checkbox slot="start"
+                          [checked]="form.controls.consent_profiling.value"
+                          (ionChange)="form.controls.consent_profiling.setValue($event.detail.checked)">
+            </ion-checkbox>
+          </ion-item>
+          <ion-item>
+            <ion-label>Privacy e trattamento dati *</ion-label>
+            <ion-checkbox slot="start"
+                          [checked]="form.controls.consent_privacy.value"
+                          (ionChange)="form.controls.consent_privacy.setValue($event.detail.checked)">
+            </ion-checkbox>
+          </ion-item>
+          <ion-note color="medium">La spunta su “Autorizzo tutti” imposta automaticamente tutte le caselle sopra.</ion-note>
+        </ng-container>
+
+      </ion-card-content>
+    </ion-card>
+
+    <!-- Navigazione -->
+    <div style="display:flex;gap:12px;justify-content:space-between;position:sticky;bottom:12px;margin-top:8px;">
+      <ion-button color="danger" fill="solid" (click)="prev()" [disabled]="step()===1">
+        <ion-icon name="chevron-back" slot="start"></ion-icon>
+        INDIETRO
+      </ion-button>
+
+      <ion-button color="success" (click)="next()" [disabled]="!canGoNext()">
+        <ng-container *ngIf="step()<9">
+          AVANTI
+          <ion-icon name="chevron-forward" slot="end"></ion-icon>
+        </ng-container>
+        <ng-container *ngIf="step()===9">
+          CONTINUA
+          <ion-icon name="checkmark" slot="end"></ion-icon>
+        </ng-container>
+      </ion-button>
+    </div>
+
+    <div style="height:10px;"></div>
+  </div>
+</ion-content>

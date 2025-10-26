@@ -21,6 +21,12 @@ registerAppIcons();
 const routes: Routes = [
   { path: 'login', component: LoginPage },
   { path: 'logout', loadComponent: () => import('./features/auth/logout.page').then(m => m.LogoutPage) },
+
+  
+  // 🔧 NEW — Flusso pubblico di prenotazione: NO auth, NO Shell admin
+  { path: 'prenota', loadComponent: () => import('./features/public-booking/public-booking.page').then(m => m.PublicBookingPage) },
+  { path: 'prenota/grazie', loadComponent: () => import('./features/public-booking/thank-you.page').then(m => m.ThankYouPage) },
+
   {
     path: '',
     component: ShellPage,

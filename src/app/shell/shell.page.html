@@ -1,3 +1,5 @@
+<!-- src/app/shell/shell.page.html -->
+
 <!-- Header superiore -->
 <ion-header>
   <ion-toolbar>
@@ -34,10 +36,10 @@
             <!-- Le icone appaiono se sono state registrate (vedi icons.ts) -->
             <ion-icon slot="start" *ngIf="item.icon" [name]="item.icon"></ion-icon>
             <ion-label>{{ item.label }}</ion-label>
-                        <!-- === INIZIO MODIFICA (badge "In attesa") === -->
-            <!-- ✅ Aggiunto: se la voce è la lista prenotazioni (item.badge true) mostro il badge -->
 
-              <ion-badge *ngIf="item.badge && pendingToday() >= 0" slot="end" color="warning">
+            <!-- === INIZIO MODIFICA (badge "In attesa") === -->
+            <!-- ✅ Se la voce è la lista prenotazioni e abbiamo un numero valido, mostro il badge -->
+            <ion-badge *ngIf="item.badge && pendingToday() >= 0" slot="end" color="warning">
               {{ pendingToday() }}
             </ion-badge>
             <!-- === FINE MODIFICA === -->
@@ -49,8 +51,6 @@
 
   <!-- AREA CONTENUTI (deve avere lo stesso id di contentId sopra) -->
   <ion-content id="main-content">
-    <!-- PRIMA: <router-outlet></router-outlet> -->
-    <!-- DOPO: -->
     <ion-router-outlet></ion-router-outlet>
   </ion-content>
 </ion-split-pane>

@@ -1,19 +1,19 @@
-
 // src/app/app.config.ts
 // ============================================================================
 // Router & Providers principali dell’app
 // - Mantiene rotte esistenti (login/logout, shell admin, reservations, ecc.)
 // - ✅ Rotte pubbliche (NO auth): /prenota, /prenota/grazie
 // - ✅ NUOVE rotte Admin (con auth):
-//     • /ordina        → “Order Builder” (porta dentro la UX PWA Customer)
-//     • /ordinazioni   → dashboard live delle ordinazioni (real-time)
-//   NB: Sono lazy-loaded come tutte le altre pagine, stile invariato.
+//     • /orders/new        → “Order Builder” (porta dentro la UX PWA Customer)
+//     • /orders            → dashboard live delle ordinazioni (real-time)
+//   NB: Lazy-loaded, stile invariato.
 // ----------------------------------------------------------------------------
-// TODO integrazione funzionale (fuori da questo file):
+// TODO (fuori da questo file):
 //   - Invio mail (admin + cliente) su nuovo ordine
 //   - Invio WhatsApp/Twilio/WhatsAppSender su nuovo ordine / stato ordine
-//   - Eventuale socket/SSE per aggiornamenti real-time su /ordinazioni
+//   - Socket/SSE per aggiornamenti real-time su /orders
 // ============================================================================
+
 import { ApplicationConfig, isDevMode, APP_INITIALIZER, LOCALE_ID } from '@angular/core';
 import { provideRouter, Routes } from '@angular/router';
 import { provideHttpClient, withInterceptors } from '@angular/common/http';
@@ -31,10 +31,12 @@ import { authInterceptor } from './core/auth/auth.interceptor';
 import { authGuard } from './core/auth/auth.guard';
 import { AuthService } from './core/auth/auth.service';
 
+// Ionicons registrate una volta all’avvio (coerente con il tuo stile)
 import { registerAppIcons } from './icons';
 registerAppIcons();
 
 const routes: Routes = [
+  // === Public (no auth, no shell) ============================================
   { path: 'login', component: LoginPage },
   { path: 'logout', loadComponent: () => import('./features/auth/logout.page').then(m => m.LogoutPage) },
 
@@ -42,6 +44,7 @@ const routes: Routes = [
   { path: 'prenota', loadComponent: () => import('./features/public-booking/public-booking.page').then(m => m.PublicBookingPage) },
   { path: 'prenota/grazie', loadComponent: () => import('./features/public-booking/thank-you.page').then(m => m.ThankYouPage) },
 
+  // === Admin shell ===========================================================
   {
     path: '',
     component: ShellPage,
@@ -55,20 +58,23 @@ const routes: Routes = [
         children: [
           {
             path: '',
-            loadComponent: () => import('./features/reservations/reservations-list.page')
-              .then(m => m.ReservationsListPage),
+            loadComponent: () =>
+              import('./features/reservations/reservations-list.page')
+                .then(m => m.ReservationsListPage),
             canActivate: [authGuard],
           },
           {
             path: 'new',
-            loadComponent: () => import('./features/reservations/new-reservation.page')
-              .then(m => m.NewReservationPage),
+            loadComponent: () =>
+              import('./features/reservations/new-reservation.page')
+                .then(m => m.NewReservationPage),
             canActivate: [authGuard],
           },
           {
             path: ':id/edit',
-            loadComponent: () => import('./features/reservations/edit-reservation.page')
-              .then(m => m.EditReservationPage),
+            loadComponent: () =>
+              import('./features/reservations/edit-reservation.page')
+                .then(m => m.EditReservationPage),
             canActivate: [authGuard],
           }
         ]
@@ -80,14 +86,16 @@ const routes: Routes = [
         children: [
           {
             path: '',
-            loadComponent: () => import('./features/orders/orders-live.page')
-              .then(m => m.OrdersLivePage),
+            loadComponent: () =>
+              import('./features/orders/orders-live.page')
+                .then(m => m.OrdersLivePage),
             canActivate: [authGuard],
           },
           {
             path: 'new',
-            loadComponent: () => import('./features/orders/order-builder.page')
-              .then(m => m.OrderBuilderPage),
+            loadComponent: () =>
+              import('./features/orders/order-builder.page')
+                .then(m => m.OrderBuilderPage),
             canActivate: [authGuard],
           }
         ]
@@ -103,15 +111,22 @@ export const appConfig: ApplicationConfig = {
     provideRouter(routes),
     provideIonicAngular(),
     { provide: LOCALE_ID, useValue: 'it-IT' },
+
+    // HTTP + intercettori (stile invariato)
     provideHttpClient(withInterceptors([authInterceptor, apiErrorInterceptor])),
+
+    // API base (env)
     { provide: API_URL, useValue: environment.apiBaseUrl },
 
+    // Bootstrap auth (inizializza il profilo/token ecc.)
     {
       provide: APP_INITIALIZER,
       useFactory: (auth: AuthService) => () => auth.init(),
       deps: [AuthService],
       multi: true
     },
+
+    // PWA
     provideServiceWorker('ngsw-worker.js', {
       enabled: !isDevMode(),
       registrationStrategy: 'registerWhenStable:30000'

@@ -1,0 +1,31 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-title>Ordini (live)</ion-title>
+    <ion-buttons slot="end">
+      <ion-button routerLink="/orders/new">Nuovo</ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <ion-list inset="true" *ngIf="rows().length; else empty">
+    <ion-item *ngFor="let o of rows(); trackBy: trackById" lines="full">
+      <ion-label>
+        <div style="display:flex; align-items:center; gap:10px">
+          <ion-badge [color]="statusColor(o.status)">{{ o.status }}</ion-badge>
+          <div style="font-weight:600">#{{ o.id }} — {{ o.customer_name }}</div>
+        </div>
+        <div style="font-size:12px; opacity:.75">
+          {{ o.created_at || '' }}
+          <span *ngIf="o.phone">· {{ o.phone }}</span>
+          <span *ngIf="o.channel">· {{ o.channel }}</span>
+        </div>
+      </ion-label>
+      <ion-note slot="end">Totale: € {{ o.total | number:'1.2-2':'it-IT' }}</ion-note>
+    </ion-item>
+  </ion-list>
+
+  <ng-template #empty>
+    <div style="padding:24px; opacity:.6">Nessun ordine.</div>
+  </ng-template>
+</ion-content>

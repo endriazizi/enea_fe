@@ -1,0 +1,119 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-title>Nuovo ordine</ion-title>
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="/orders"></ion-back-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <div style="max-width:820px;margin:0 auto;padding:12px;">
+    <!-- Stepper -->
+    <ion-segment [value]="currentStep()">
+      <ion-segment-button value="1"><ion-label>Dati</ion-label></ion-segment-button>
+      <ion-segment-button value="2"><ion-label>Articoli</ion-label></ion-segment-button>
+      <ion-segment-button value="3"><ion-label>Conferma</ion-label></ion-segment-button>
+    </ion-segment>
+
+    <div style="height:10px"></div>
+
+    <ng-container [ngSwitch]="currentStep()">
+      <!-- STEP 1: Dati cliente -->
+      <ng-container *ngSwitchCase="1">
+        <ion-list inset="true">
+          <ion-item lines="full">
+            <ion-label position="stacked">Nome cliente *</ion-label>
+            <ion-input placeholder="Mario Rossi"
+                       (ionInput)="onNameInput($event)"></ion-input>
+          </ion-item>
+
+          <ion-item lines="full" style="margin-top:8px">
+            <ion-label position="stacked">Telefono</ion-label>
+            <ion-input type="tel" inputmode="tel"
+                       placeholder="+39 333 123 4567"
+                       (ionInput)="onPhoneInput($event)"></ion-input>
+          </ion-item>
+
+          <ion-item lines="full" style="margin-top:8px">
+            <ion-label position="stacked">Note</ion-label>
+            <ion-textarea autoGrow="true"
+                          placeholder="Es. senza cipolla"
+                          (ionInput)="onNoteInput($event)"></ion-textarea>
+          </ion-item>
+        </ion-list>
+      </ng-container>
+
+      <!-- STEP 2: Articoli (mock) -->
+      <ng-container *ngSwitchCase="2">
+        <ion-list inset="true">
+          <ion-item>
+            <ion-label>Articoli</ion-label>
+            <ion-note slot="end">Totale: € {{ total() | number:'1.2-2':'it-IT' }}</ion-note>
+          </ion-item>
+
+          <div style="display:flex;gap:8px;padding:12px;flex-wrap:wrap;">
+            <ion-button size="default" (click)="addPreset('Margherita', 6.5)">+ Margherita</ion-button>
+            <ion-button size="default" (click)="addPreset('Diavola', 7.5)">+ Diavola</ion-button>
+            <ion-button size="default" (click)="addPreset('Prosciutto', 8.0)">+ Prosciutto</ion-button>
+          </div>
+
+          <ion-item *ngFor="let it of items()" lines="full">
+            <ion-label>
+              {{ it.name }} × {{ it.qty }}
+              <div style="font-size:12px;opacity:.7">€ {{ (it.price * it.qty) | number:'1.2-2':'it-IT' }}</div>
+            </ion-label>
+            <ion-buttons slot="end">
+              <ion-button fill="outline" (click)="decItem(it.name, it.price)">
+                <ion-icon name="remove-circle" slot="icon-only"></ion-icon>
+              </ion-button>
+            </ion-buttons>
+          </ion-item>
+        </ion-list>
+      </ng-container>
+
+      <!-- STEP 3: Conferma -->
+      <ng-container *ngSwitchCase="3">
+        <ion-list inset="true">
+          <ion-item>
+            <ion-label>
+              <div style="font-weight:600">{{ customerName() || '—' }}</div>
+              <div style="font-size:12px;opacity:.7">{{ customerPhone() || '' }}</div>
+            </ion-label>
+            <ion-note slot="end">Totale: € {{ total() | number:'1.2-2':'it-IT' }}</ion-note>
+          </ion-item>
+
+          <ion-item lines="none" *ngFor="let it of items()">
+            <ion-label>{{ it.name }} × {{ it.qty }}</ion-label>
+            <ion-note slot="end">€ {{ (it.price * it.qty) | number:'1.2-2':'it-IT' }}</ion-note>
+          </ion-item>
+
+          <ion-item lines="none" *ngIf="note()">
+            <ion-label>Note</ion-label>
+            <ion-note slot="end">{{ note() }}</ion-note>
+          </ion-item>
+        </ion-list>
+
+        <ion-note *ngIf="errorMsg()" color="danger" style="display:block;margin:8px 12px;">
+          {{ errorMsg() }}
+        </ion-note>
+
+        <div style="padding:12px;">
+          <ion-button expand="block" size="large" [disabled]="loading()" (click)="submit()">
+            {{ loading() ? 'Invio…' : 'Conferma e crea' }}
+          </ion-button>
+        </div>
+      </ng-container>
+
+      <ng-container *ngSwitchDefault>
+        <div style="padding:20px;opacity:.6">Step non valido.</div>
+      </ng-container>
+    </ng-container>
+
+    <!-- Navigazione step -->
+    <div style="display:flex;gap:10px;position:sticky;bottom:0;background:var(--ion-color-step-50,#fff);padding:10px;border-top:1px solid rgba(0,0,0,.06);">
+      <ion-button fill="outline" [disabled]="currentStep()===1" (click)="prev()">Indietro</ion-button>
+      <ion-button [disabled]="currentStep()===3" (click)="next()">Avanti</ion-button>
+    </div>
+  </div>
+</ion-content>

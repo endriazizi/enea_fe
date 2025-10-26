@@ -263,37 +263,43 @@ export class NewReservationPage implements OnDestroy {
     } catch { this.rooms.set([]); }
   }
 
+
+
   async onSubmit() {
-    if (this.form.invalid) { this.form.markAllAsTouched(); return; }
-    this.loading.set(true);
-    try {
-      const v = this.form.value;
-      const dto = {
-        customer_first: v.customer_first?.trim() || null,
-        customer_last : v.customer_last?.trim() || null,
-        phone         : v.phone?.trim() || null,
-        email         : v.email?.trim() || null,
-        party_size    : v.party_size!,
-        start_at      : v.start_at!,          // ISO UTC
-        end_at        : v.end_at || null,
-        notes         : v.notes?.trim() || null,
-        table_id      : v.table_id || null
-      };
-      const res = await this.api.create(dto);
-      console.log('✅ [NewReservation] created →', res);
+  if (this.form.invalid) { this.form.markAllAsTouched(); return; }
+  this.loading.set(true);
+  try {
+    const v = this.form.value;
+    const dto = {
+      customer_first: v.customer_first?.trim() || null,
+      customer_last : v.customer_last?.trim() || null,
+      phone         : v.phone?.trim() || null,
+      email         : v.email?.trim() || null,
+      party_size    : Number(v.party_size ?? 1),
+      start_at      : v.start_at!,              // ISO UTC
+      end_at        : v.end_at || null,
+      notes         : v.notes?.trim() || null,
+      room_id       : v.room_id ?? null,        // ✅ aggiunto
+      table_id      : v.table_id ?? null
+    };
 
-      // 🎯 subito dopo il salvataggio → svuoto form + segnali
-      this.resetFormToDefaults(/*autoselectRoom*/ true);
+    const res = await firstValueFrom(this.api.create(dto));   // ✅ await corretto
+    console.log('✅ [NewReservation] created →', res);
 
-      // e torno alla lista
-      this.router.navigateByUrl('/reservations');
-    } catch (e: any) {
-      console.error('💥 [NewReservation] create KO', e);
-      alert(e?.error?.message || e?.message || 'Errore creazione prenotazione');
-    } finally {
-      this.loading.set(false);
-    }
+    this.resetFormToDefaults(/*autoselectRoom*/ true);
+    this.router.navigateByUrl('/reservations');
+  } catch (e: any) {
+    console.error('💥 [NewReservation] create KO', e);
+    (await this.toast.create({
+      message: e?.error?.message || e?.message || 'Errore creazione prenotazione',
+      duration: 2200, color: 'danger'
+    })).present();
+  } finally {
+    this.loading.set(false);
   }
+}
+
+
 
   async clearForm() {
     this.resetFormToDefaults(/*autoselectRoom*/ true);

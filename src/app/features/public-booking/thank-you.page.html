@@ -1,0 +1,50 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-title>Grazie!</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content [fullscreen]="true">
+  <div style="max-width:760px;margin:16px auto;padding:12px;">
+    <ion-card>
+      <ion-card-header>
+        <ion-card-title style="display:flex;align-items:center;gap:8px;">
+          ✅ Prenotazione inviata
+        </ion-card-title>
+      </ion-card-header>
+
+      <ion-card-content>
+        <p *ngIf="name">Ciao <b>{{ name }}</b>!</p>
+        <p>Ti aspettiamo il <b>{{ date }}</b> alle <b>{{ time }}</b> — {{ party }} persone.</p>
+
+        <div style="height:8px;"></div>
+
+        <div style="display:flex;flex-wrap:wrap;gap:10px;">
+          <a [href]="icsHref()" download="prenotazione.ics">
+            <ion-button>
+              + Aggiungi al calendario
+            </ion-button>
+          </a>
+
+          <a [href]="mapsUrl" target="_blank" rel="noopener">
+            <ion-button color="medium" fill="outline">
+              Indicazioni stradali
+            </ion-button>
+          </a>
+
+          <ion-button color="success" [routerLink]="['/prenota']">
+            Nuova prenotazione
+          </ion-button>
+
+          <ion-button color="medium" fill="clear" (click)="goHome()">
+            Chiudi
+          </ion-button>
+        </div>
+
+        <div style="opacity:.7;margin-top:12px;">
+          In caso di ritardo, ti chiediamo cortesia di avvisare. Grazie!
+        </div>
+      </ion-card-content>
+    </ion-card>
+  </div>
+</ion-content>

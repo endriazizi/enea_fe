@@ -2,6 +2,7 @@
  * ============================================================================
  * Import CSS Ionic + piccoli fix per z-index FAB e tap su iOS/Android
  * (abilito pointer-events sui pulsanti nello slot=end della riga).
+ * Mantengo la tua UI, solo ritocchi per allineamento icone/pulsanti.
  * ============================================================================
  */
 @import '@ionic/angular/css/core.css';
@@ -18,6 +19,41 @@
 /* FAB sempre sopra */
 ion-fab { z-index: 9999; }
 
-/* Sblocco tap su iOS/Android: pulsanti nello slot=end devono ricevere eventi */
+/* Sblocco tap su iOS/Android:
+   - se la tua lista usa ion-buttons nello slot=end */
 .resv-row ion-buttons[slot='end'] { pointer-events: auto; }
 .resv-row ion-buttons[slot='end'] ion-button { pointer-events: auto; }
+
+/* E nel caso in cui in qualche vista ci siano ion-button direttamente nello slot=end */
+.resv-row ion-button[slot='end'] { pointer-events: auto; }
+
+/* FAB (mobile) – icone perfettamente centrate */
+.fab-resv ion-fab-button {
+  width: 56px;
+  height: 56px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.fab-resv ion-fab-list ion-fab-button {
+  width: 48px;
+  height: 48px;
+}
+.fab-resv ion-icon {
+  font-size: 24px;
+  line-height: 1;
+}
+
+/* Bottoni orari compatti: icona/testo allineati */
+ion-button[fill="outline"] ion-icon,
+ion-button[fill="solid"]   ion-icon {
+  vertical-align: middle;
+}
+
+/* Migliora target touch su mobile (>=44px) solo dove serve */
+@media (pointer: coarse) {
+  ion-button { min-height: 44px; }
+}
+
+/* Nessun cambiamento di palette/tema: lasciamo tutto com’è */
+    

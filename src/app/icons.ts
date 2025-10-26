@@ -1,42 +1,16 @@
 // src/app/icons.ts
-// ============================================================================
-// Registra le icone Ionicons usate nell'app per evitare fetch da CDN/404.
-// Nota: aggiungo alcune icone che già compaiono nei template (chevron*, checkmark,
-// mail, close, ecc.), così su iOS/desktop non hai placeholder vuoti.
-// ============================================================================
-
 import { addIcons } from 'ionicons';
 import {
-  home,
-  list,
-  addCircle,
-  removeCircle,
-  ellipsisVertical,
-  funnelOutline,
-  printOutline,
-  qrCodeOutline,
-  addOutline,
-  calendarOutline,
-  documentTextOutline,
-  createOutline,
-  trashOutline,
-  saveOutline,
-  // 👇 nuove/mancanti
-  informationCircleOutline,
-  trashBinOutline,
-  closeOutline,
-  checkmarkCircleOutline,
-  mailOutline,
-  refreshOutline,
-  chevronBack,
-  chevronForward,
-  checkmark,
+  home, list, addCircle, removeCircle, ellipsisVertical,
+  funnelOutline, printOutline, qrCodeOutline, addOutline, calendarOutline,
+  documentTextOutline, createOutline, trashOutline, saveOutline,
+  callOutline, mailOutline, peopleOutline, timeOutline, searchOutline,
+  checkmarkOutline, closeOutline
 } from 'ionicons/icons';
 
 export function registerAppIcons() {
   addIcons({
-    home,
-    list,
+    home, list,
     'add-circle': addCircle,
     'remove-circle': removeCircle,
     'ellipsis-vertical': ellipsisVertical,
@@ -49,16 +23,12 @@ export function registerAppIcons() {
     'create-outline': createOutline,
     'trash-outline': trashOutline,
     'save-outline': saveOutline,
-    // nuove
-    'information-circle-outline': informationCircleOutline,
-    'trash-bin-outline': trashBinOutline,
-    'close-outline': closeOutline,
-    'checkmark-circle-outline': checkmarkCircleOutline,
+    'call-outline': callOutline,
     'mail-outline': mailOutline,
-    'refresh-outline': refreshOutline,
-    'chevron-back': chevronBack,
-    'chevron-forward': chevronForward,
-    'checkmark': checkmark,
+    'people-outline': peopleOutline,
+    'time-outline': timeOutline,
+    'search-outline': searchOutline,
+    'checkmark-outline': checkmarkOutline,
+    'close-outline': closeOutline,
   });
 }
-  

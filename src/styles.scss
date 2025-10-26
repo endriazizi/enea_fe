@@ -1,5 +1,9 @@
-/* You can add global styles to this file, and also import other style files */
-/* Ionic core + utilities */
+/* src/styles.scss
+ * ============================================================================
+ * Import CSS Ionic + piccoli fix per z-index FAB e tap su iOS/Android
+ * (abilito pointer-events sui pulsanti nello slot=end della riga).
+ * ============================================================================
+ */
 @import '@ionic/angular/css/core.css';
 @import '@ionic/angular/css/normalize.css';
 @import '@ionic/angular/css/structure.css';
@@ -11,8 +15,9 @@
 @import '@ionic/angular/css/text-transformation.css';
 @import '@ionic/angular/css/flex-utils.css';
 
+/* FAB sempre sopra */
+ion-fab { z-index: 9999; }
 
-//assicurare che la FAB stia sopra a tutto
-ion-fab {
-  z-index: 9999;
-}
+/* Sblocco tap su iOS/Android: pulsanti nello slot=end devono ricevere eventi */
+.resv-row ion-buttons[slot='end'] { pointer-events: auto; }
+.resv-row ion-buttons[slot='end'] ion-button { pointer-events: auto; }

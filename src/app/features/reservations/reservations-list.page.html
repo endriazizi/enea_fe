@@ -1,124 +1,86 @@
+<!-- src/app/features/reservations/reservations-list.page.html -->
 <ion-header>
   <ion-toolbar>
     <ion-title>Prenotazioni</ion-title>
-    <ion-buttons slot="end">
-      <ion-button routerLink="/reservations/new" routerDirection="forward">Nuova</ion-button>
+
+    <!-- UI Desktop: pulsanti con icona+testo (niente cambi UX, solo comodo su desktop) -->
+    <ion-buttons slot="end" class="ion-hide-md-down">
+      <ion-button (click)="openFilterSheet()" title="Filtri">
+        <ion-icon slot="start" name="funnel-outline"></ion-icon>
+        Filtri
+      </ion-button>
+      <ion-button [disabled]="printing()" (click)="printTodayThermal()" title="Stampa termica (oggi)">
+        <ion-icon slot="start" name="print-outline"></ion-icon>
+        Stampa oggi
+      </ion-button>
+      <ion-button [disabled]="printing()" (click)="printPlacecardsToday()" title="Segnaposti (oggi)">
+        <ion-icon slot="start" name="document-text-outline"></ion-icon>
+        Segnaposti
+      </ion-button>
+      <ion-button routerLink="/reservations/new" title="Nuova prenotazione">
+        <ion-icon slot="start" name="create-outline"></ion-icon>
+        Nuova
+      </ion-button>
     </ion-buttons>
   </ion-toolbar>
 </ion-header>
 
-<!-- QUICK DAY PICKER come filtro -->
-<app-date-quick
-  [title]="'Giorno rapido'"
-  [showTodayLine]="false"
-  [days]="7"
-  [selected]="selectedDayForPicker()"
-  (selectedChange)="onQuickFilterDay($event)">
-</app-date-quick>
-
 <ion-content>
-  <div style="padding: 12px;">
-    <!-- segment range -->
-    <ion-segment [value]="rangePreset()" (ionChange)="onPresetChange($event)" mode="md">
-      <ion-segment-button value="today">Oggi</ion-segment-button>
-      <ion-segment-button value="7d">Ultimi 7 giorni</ion-segment-button>
-      <ion-segment-button value="all">Tutte</ion-segment-button>
-    </ion-segment>
+  <!-- Ricerca -->
+  <ion-searchbar placeholder="Cerca per nome/telefono/email" (ionInput)="onSearchChange($event)"></ion-searchbar>
 
-    <div style="height: 8px;"></div>
-
-    <!-- segment status -->
-    <ion-segment [value]="status()" (ionChange)="onStatusChange($event)" mode="md">
-      <ion-segment-button value="all">Tutti</ion-segment-button>
-      <ion-segment-button value="pending">In attesa</ion-segment-button>
-      <ion-segment-button value="accepted">Accettate</ion-segment-button>
-      <ion-segment-button value="rejected">Rifiutate</ion-segment-button>
-      <ion-segment-button value="cancelled">Cancellate</ion-segment-button>
-    </ion-segment>
-
-    <div style="display:flex; align-items:center; gap:8px; padding: 6px 12px; font-size:12px; opacity:.8;">
-      <ion-icon name="calendar-outline"></ion-icon>
-      <span>{{ rangeLabel() }}</span>
-      <ion-badge *ngIf="resultsCount()">{{ resultsCount() }}</ion-badge>
-    </div>
-
-    <!-- <div style="margin-top:6px; padding:6px 0; display:flex; align-items:center; gap:8px; font-size:12px; opacity:.85;">
-      <ion-icon name="calendar-outline"></ion-icon>
-      <span>Oggi, {{ todayLabel() }}</span>
-    </div> -->
-
-    <!-- bottoni (desktop) -->
-    <div class="ion-hide-md-down" style="padding: 12px; display:flex; gap:8px; flex-wrap:wrap;">
-      <ion-button fill="outline" size="small" (click)="load()">Ricarica</ion-button>
-      <ion-button size="small" [disabled]="printing()" (click)="printPlacecardsToday()">
-        {{ printing() ? 'Invio…' : 'Segnaposti (oggi)' }}
-      </ion-button>
-      <ion-button size="small" [disabled]="printing()" (click)="printTodayThermal()">
-        {{ printing() ? 'Stampa…' : 'Stampa termica (oggi)' }}
-      </ion-button>
-      <ion-button size="small" (click)="openFilterSheet()">Filtri</ion-button>
-    </div>
-
-    <div style="height: 8px;"></div>
-
-    <ion-searchbar
-      placeholder="Cerca per nome / telefono / email"
-      [value]="q()"
-      (ionInput)="onSearchChange($event)"
-      (ionClear)="clearSearch()"
-      showCancelButton="never"
-      mode="md">
-    </ion-searchbar>
-  </div>
-
+  <!-- Pull-to-refresh -->
   <ion-refresher slot="fixed" (ionRefresh)="load($event)">
     <ion-refresher-content></ion-refresher-content>
   </ion-refresher>
 
-  <div *ngIf="error()" style="padding: 12px; color:#dc2626;">
-    {{ error() }}
-  </div>
-
-  <ion-list *ngIf="!error()">
-    <!-- Tap riga → EDIT via TS; il bottone Azioni non naviga -->
+  <!-- Lista prenotazioni -->
+  <ion-list inset="true">
+    <!-- ⚠️ FIX iOS/Android: NIENTE 'button' su ion-item; uso (click) sul container.
+         Evita il caso 'button dentro button' con i pulsanti nello slot=end. -->
     <ion-item
-      button
-      detail="false"
       *ngFor="let r of rows(); trackBy: trackById"
-      (click)="openEdit(r)">
-      <ion-buttons slot="end">
-        <!-- 🔒 blocca la propagazione e apri il quick sheet -->
-        <ion-button type="button" (click)="onActionsClick($event, r)">Azioni</ion-button>
-      </ion-buttons>
+      lines="full"
+      detail="false"
+      (click)="openEdit(r)"
+      class="resv-row">
 
       <ion-label>
-        <div style="display:flex; align-items:center; gap:6px;">
-          <b>{{ r.customer_first || '—' }} {{ r.customer_last || '' }}</b>
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:2px;">
           <ion-badge [color]="getStatusColor(r.status)">{{ r.status }}</ion-badge>
+          <b>{{ r.customer_first }} {{ r.customer_last }}</b>
+          <span style="opacity:.6">· #{{ r.id }}</span>
         </div>
-        <div style="font-size:13px; margin-top:2px;">
+
+        <div style="font-size:12px; margin-top:2px;">
           {{ r.phone || '—' }}
-          <span *ngIf="r.email" style="opacity:.6"> &middot; {{ r.email }}</span>
-          <span style="opacity:.6"> &middot; {{ r.party_size }} coperti</span>
+          <span *ngIf="r.email" style="opacity:.6"> · {{ r.email }}</span>
+          <span style="opacity:.6"> · {{ r.party_size }} coperti</span>
         </div>
+
         <div style="font-size:12px; margin-top:2px; opacity:.8;">
-          {{ r.start_at | date:'EEEE dd/MM/yyyy h:mm a':'':'it-IT' }} →
-          {{ r.end_at   | date:'EEEE dd/MM/yyyy, h:mm a':'':'it-IT' }}
-          <span *ngIf="r.table_number"> &middot; Tavolo {{ r.table_number }}</span>
+          {{ r.start_at | date:'EEEE dd/MM/yyyy, H:mm':'':'it-IT' }}
+          →
+          {{ r.end_at   | date:'EEEE dd/MM/yyyy, H:mm':'':'it-IT' }}
+          <span *ngIf="r.table_number"> · Tavolo {{ r.table_number }}</span>
         </div>
+
         <div *ngIf="r.notes" style="margin-top:4px; opacity:.7;">Note: {{ r.notes }}</div>
       </ion-label>
+
+      <!-- Azioni riga: cliccabili su iOS/Android (no annidamento button) -->
+      <ion-buttons slot="end" class="row-actions">
+        <ion-button fill="clear" (click)="onActionsClick($event, r)" title="Azioni">
+          <ion-icon name="ellipsis-vertical"></ion-icon>
+        </ion-button>
+      </ion-buttons>
     </ion-item>
   </ion-list>
 
-  <div *ngIf="!loading() && !error() && !rows().length" style="padding: 12px; opacity:.7;">
-    Nessuna prenotazione trovata per i filtri selezionati.
-  </div>
-
-  <!-- FAB mobile -->
+  <!-- FAB mobile, invariato -->
   <ion-fab slot="fixed" horizontal="end" vertical="bottom" class="ion-hide-md-up">
-    <ion-fab-button>
-      <ion-icon name="add-outline"></ion-icon>
+    <ion-fab-button title="Azioni">
+      <ion-icon name="ellipsis-vertical"></ion-icon>
     </ion-fab-button>
     <ion-fab-list side="top">
       <ion-fab-button (click)="openFilterSheet()" title="Filtri">
@@ -130,7 +92,7 @@
       <ion-fab-button [disabled]="printing()" (click)="printPlacecardsToday()" title="Segnaposti (oggi)">
         <ion-icon name="document-text-outline"></ion-icon>
       </ion-fab-button>
-      <ion-fab-button routerLink="/reservations/new" title="Nuova">
+      <ion-fab-button routerLink="/reservations/new" title="Nuova prenotazione">
         <ion-icon name="create-outline"></ion-icon>
       </ion-fab-button>
     </ion-fab-list>

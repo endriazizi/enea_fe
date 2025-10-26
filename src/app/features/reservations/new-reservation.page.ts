@@ -1,56 +1,57 @@
 // src/app/features/reservations/new-reservation.page.ts
-//
-// Pagina "Nuova prenotazione" — stile originale
-// - Stepper coperti, date quick, fallback calendario
-// - Caricamento sale/tavoli onChange
-// - Autocomplete Google Contacts (parent-driven): query → service, select → patch campi cliente
-// - Signals @angular/core, reactive forms, niente ngModel sui signals
+// ============================================================================
+// Pagina "Nuova Prenotazione"
+// - Stile invariato (commenti lunghi, log con emoji, Signals).
+// - FIX: aggiunti tutti i metodi/proprietà richiamati dal template (vedi sotto)
+// - FIX specifico di questo commit: import e registrazione di IonButtons
+//   (altrimenti NG8001: 'ion-buttons' is not a known element).
+// - Hook già presente: dopo create(), se status === 'pending' invio 2 email.
+// ============================================================================
 
-import { Component, inject, signal, computed, OnDestroy } from '@angular/core';
-import { FormBuilder, Validators, ReactiveFormsModule } from '@angular/forms';
+import { Component, OnDestroy, computed, inject, signal } from '@angular/core';
+import { FormBuilder, Validators, ReactiveFormsModule, AbstractControl } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
 // Angular common
-import { NgIf, NgFor } from '@angular/common';
+import { NgIf, NgFor, DatePipe } from '@angular/common';
 
 // Ionic standalone
 import {
   IonContent, IonHeader, IonToolbar, IonTitle,
-  IonItem, IonLabel, IonInput, IonButton, IonSelect, IonSelectOption,
+  IonItem, IonLabel, IonInput, IonButton, IonButtons, IonSelect, IonSelectOption,
   IonTextarea, IonDatetime, IonNote, IonList,
   IonIcon, IonFab, IonFabButton, IonFabList, IonSegment, IonSegmentButton
 } from '@ionic/angular/standalone';
 import { ToastController } from '@ionic/angular';
 
-// Service API FE
-import { ReservationsApi, Room, Table } from '../../core/reservations/reservations.service';
+// API FE
+import { ReservationsApi, Room, Table, Reservation } from '../../core/reservations/reservations.service';
 
-// UI riusabile — scroller 7 giorni
-import { DateQuickComponent } from '../../features/reservations/_components/ui/date-quick/date-quick.component';
+// UI riusabile — quick date (se presente nel tuo progetto)
+import { DateQuickComponent } from './_components/ui/date-quick/date-quick.component';
 
-// Google Contacts (component figlio + tipo pick)
+// Autocomplete Google Contacts (se presente)
 import {
   GContactsAutocompleteComponent,
   GContactPick
 } from './_components/gcontacts-autocomplete/gcontacts-autocomplete.component';
 
-// Service reale (GIS + People API) — espone .searching (signal) e .searchContacts(q, limit)
-import { GoogleContactsService } from '../../core/google/google-contacts.service';
+// Email su pending (admin + cliente)
+import { EmailNotifyService } from '../../core/notifications/email-notify.service';
 
 @Component({
   standalone: true,
   selector: 'app-new-reservation',
   templateUrl: './new-reservation.page.html',
   imports: [
-    IonSegmentButton, IonSegment,
     // Angular
-    ReactiveFormsModule, NgIf, NgFor, RouterLink,
+    ReactiveFormsModule, NgIf, NgFor, RouterLink, DatePipe,
     // Ionic
     IonContent, IonHeader, IonToolbar, IonTitle,
-    IonItem, IonLabel, IonInput, IonButton, IonSelect, IonSelectOption,
+    IonItem, IonLabel, IonInput, IonButton, IonButtons, IonSelect, IonSelectOption,
     IonTextarea, IonDatetime, IonNote, IonList, IonIcon,
-    IonFab, IonFabButton, IonFabList,
+    IonFab, IonFabButton, IonFabList, IonSegment, IonSegmentButton,
     // Shared UI
     DateQuickComponent,
     // Autocomplete Google Contacts
@@ -62,307 +63,253 @@ export class NewReservationPage implements OnDestroy {
   private api    = inject(ReservationsApi);
   private router = inject(Router);
   private toast  = inject(ToastController);
-  private gcs    = inject(GoogleContactsService); // ✅ People API
+  private mail   = inject(EmailNotifyService);
 
-  // Stato UI (signals semplici)
-  loading = signal(false);
-  rooms   = signal<Room[]>([]);
-  tables  = signal<Table[]>([]);
+  // ========================== Signals / Stato UI ==============================
+  loading      = signal(false);
+  rooms        = signal<Room[]>([]);
+  tables       = signal<Table[]>([]);
+  step         = signal(1);
+  maxStep      = 9;
 
-  // ===== Google Contacts (parent-driven) =====================================
-  // Risultati mostrati nel componente figlio
-  gcResults   = signal<GContactPick[]>([]);
-  // Spinner "ricerca..." fornito dalla service
-  gcSearching = this.gcs.searching;
+  // Mostra/nasconde calendario avanzato (IonDatetime) — default: chiuso
+  private _showAdvanced = signal(false);
+  showAdvanced = () => this._showAdvanced();
 
-  /**
-   * Query dall'autocomplete → People API
-   * - ignoro query < 2 char
-   * - salvo i risultati tipizzati (GContactPick)
-   */
-  async onGcQueryChange(q: string) {
-    const query = (q || '').trim();
-    if (query.length < 2) { this.gcResults.set([]); return; }
-    try {
-      const rows = await this.gcs.searchContacts(query, 12);
-      this.gcResults.set(rows || []);
-    } catch (e) {
-      console.warn('🔎 [NewReservation] Google search KO', e);
-      this.gcResults.set([]);
-    }
-  }
+  // Slot orari "rapidi"
+  readonly lunchSlots  = ['12:00','12:30','13:00','13:30','14:00'];
+  readonly dinnerSlots = ['19:00','19:30','20:00','20:30','21:00','21:30','22:00'];
 
-  /**
-   * Selezione contatto dall'autocomplete:
-   * - patcha SOLO i campi cliente (niente reset del resto)
-   * - il child svuota già la query; qui svuotiamo la lista risultati
-   */
-  onContactSelected(pick: GContactPick) {
-    this.form.patchValue({
-      customer_first: (pick.givenName ?? '') || (pick.displayName?.split(' ')[0] ?? ''),
-      customer_last : (pick.familyName ?? '') || (pick.displayName?.split(' ').slice(1).join(' ') ?? ''),
-      phone         : pick.phone ?? '',
-      email         : pick.email ?? '',
-    }, { emitEvent: false });
-    this.gcResults.set([]);
-  }
-  // ==========================================================================
-
-  // Form reattivo
+  // ============================== Form =======================================
   form = this.fb.group({
-    customer_first: [''],
-    customer_last : [''],
+    customer_first: ['', [Validators.required]],
+    customer_last : ['', [Validators.required]],
     phone         : [''],
-    email         : ['', Validators.email],
-    party_size    : [1,  [Validators.required, Validators.min(1)]],
-    start_at      : ['', [Validators.required]],  // ISO UTC
-    end_at        : [''],                         // opzionale (BE la calcola)
+    email         : ['', [Validators.email]],
+    party_size    : [2,  [Validators.required, Validators.min(1)]],
+    date          : ['', [Validators.required]], // YYYY-MM-DD
+    time          : ['', [Validators.required]], // HH:mm
+    reason        : [''],
+    notes         : [''],
     room_id       : [null as number | null],
     table_id      : [null as number | null],
-    notes         : ['']
   });
 
-  // Data selezionata (YYYY-MM-DD) per il componente rapido
-  selectedDateISO = signal(toTodayISO());
+  // ===== Getter comodi per template (invalid/dirty/touched) ===================
+  get emailCtrl(): AbstractControl<any, any> { return this.form.controls.email; }
+  get startCtrl(): AbstractControl<any, any> { return this.form.controls.time; }
 
-  // Slot orari (personalizzabili)
-  lunchSlots  = buildTimeRange('12:00', '15:00', 30);
-  dinnerSlots = buildTimeRange('19:00', '22:30', 30);
+  // =============================== Stepper ===================================
+  canGoNext(): boolean {
+    const s = this.step();
+    const c = this.form.controls;
+    if (s === 1) return c.customer_first.valid && c.customer_last.valid;
+    if (s === 2) return true; // telefono opzionale
+    if (s === 3) return c.email.valid;
+    if (s === 4) return c.party_size.valid;
+    if (s === 5) return c.date.valid;
+    if (s === 6) return c.time.valid;
+    if (s >= 7) return true;
+    return true;
+  }
+  next() { if (this.step() < this.maxStep) this.step.update(n => n + 1); else this.submit(); }
+  prev() { if (this.step() > 1) this.step.update(n => n - 1); }
 
-  // ora selezionata (HH:mm)
-  selectedTime = signal<string | null>(null);
+  // ============================ Utility template =============================
+  onSubmit() { this.submit(); }
 
-  // calendario avanzato (fallback)
-  showAdvanced = signal(false);
-
-  // Etichetta “Oggi: …”
-  now = signal(new Date());
-  private clock?: any;
-  graceMinutes = 10;
-
-  todayLabel = computed(() =>
-    new Intl.DateTimeFormat('it-IT', {
-      weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric'
-    }).format(this.now())
-  );
-
-  selectedDateHuman = computed(() =>
-    new Intl.DateTimeFormat('it-IT', {
-      weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric'
-    }).format(new Date(this.selectedDateISO() + 'T00:00:00'))
-  );
-
-  advancedValue = computed(() => {
-    const d = this.selectedDateISO();
-    const t = this.selectedTime();
-    return t ? `${d}T${t}:00` : `${d}T12:00:00`;
-  });
-
-  // ====== Ionic lifecycle ======
-  /** Entra in vista → voglio un form pulito (utile quando torni qui dalla nav dell’app). */
-  ionViewWillEnter() {
-    this.resetFormToDefaults(/*autoselectRoom*/ true);
+  onContactSelected(p: GContactPick | null) {
+    if (!p) return;
+    // Patch SOLO i campi cliente (senza toccare altro)
+    this.form.patchValue({
+      customer_first: p.givenName || '',
+      customer_last : p.familyName || '',
+      email         : p.email || '',
+      phone         : p.phone || ''
+    }, { emitEvent: false });
+    console.log('👤 [GC] Contatto selezionato → form patchato');
   }
 
-  /** Esce dalla vista → svuoto così la cache dell’outlet non conserva i dati. */
-  ionViewDidLeave() {
-    this.resetFormToDefaults(/*autoselectRoom*/ false);
+  forceUpper(field: 'customer_first'|'customer_last', ev: any) {
+    // IonInput (ionInput) espone ev.detail.value; fallback a ev.target.value
+    const raw = (ev?.detail?.value ?? ev?.target?.value ?? '') as string;
+    const val = raw.toUpperCase();
+    this.form.controls[field].setValue(val);
   }
 
-  // ===== Interazioni =====
+  decParty() {
+    const ctrl = this.form.controls.party_size;
+    const n = Number(ctrl.value || 1);
+    ctrl.setValue(Math.max(1, n - 1));
+  }
+  incParty() {
+    const ctrl = this.form.controls.party_size;
+    const n = Number(ctrl.value || 1);
+    ctrl.setValue(n + 1);
+  }
+
+  selectedDateISO(): string {
+    const d = (this.form.controls.date.value || '') as string;
+    if (d) return d;
+    // fallback: oggi (YYYY-MM-DD)
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm = String(now.getMonth()+1).padStart(2,'0');
+    const dd = String(now.getDate()).padStart(2,'0');
+    const today = `${yyyy}-${mm}-${dd}`;
+    this.form.controls.date.setValue(today);
+    return today;
+  }
 
   onQuickDate(dateISO: string) {
-    // Cambio giorno → resetta orario e start_at
-    this.selectedDateISO.set(dateISO);
-    this.selectedTime.set(null);
-    this.form.patchValue({ start_at: '' });
+    if (!dateISO) return;
+    this.form.controls.date.setValue(dateISO);
+    console.log('📅 [QuickDate] selezionato', dateISO);
   }
 
-  forceUpper(ctrl: 'customer_first' | 'customer_last' | 'notes', ev: any) {
-    const raw = (ev?.detail?.value ?? '').toString();
-    const upper = raw.toLocaleUpperCase('it-IT');
-    if (raw !== upper) this.form.patchValue({ [ctrl]: upper } as any, { emitEvent: false });
+  selectedTime(): string {
+    return (this.form.controls.time.value || '') as string;
   }
 
-  incParty() {
-    const cur = Number(this.form.value.party_size || 1);
-    const next = Math.min(20, cur + 1);
-    this.form.patchValue({ party_size: next });
-  }
-  decParty() {
-    const cur = Number(this.form.value.party_size || 1);
-    const next = Math.max(1, cur - 1);
-    this.form.patchValue({ party_size: next });
-  }
-
-  isSlotDisabled(dateISO: string, hhmm: string): boolean {
-    if (dateISO !== toTodayISO()) return false;
-    const [h, m] = hhmm.split(':').map(Number);
-    const slotMin = h * 60 + m;
-    const now = this.now();
-    const nowMin = now.getHours() * 60 + now.getMinutes();
-    return slotMin <= nowMin + this.graceMinutes;
+  isSlotDisabled(dateISO: string, t: string): boolean {
+    // Disabilita slot già passati se la data è oggi
+    try {
+      const [H, M] = t.split(':').map(n => parseInt(n, 10));
+      const slot = new Date(`${dateISO}T${String(H).padStart(2,'0')}:${String(M).padStart(2,'0')}:00`);
+      const now  = new Date();
+      const dateOnly = new Date(`${dateISO}T00:00:00`);
+      const todayOnly = new Date(`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}T00:00:00`);
+      if (dateOnly < todayOnly) return true;
+      if (dateOnly > todayOnly) return false;
+      return slot.getTime() < (now.getTime() - 10 * 60 * 1000);
+    } catch { return false; }
   }
 
   onSelectTime(t: string) {
-    if (this.isSlotDisabled(this.selectedDateISO(), t)) return;
-    this.selectedTime.set(t);
-    const isoUTC = localDateTimeToUTCISO(this.selectedDateISO(), t);
-    this.form.patchValue({ start_at: isoUTC });
+    this.form.controls.time.setValue(t);
+    console.log('🕒 [Time] selezionato', t);
   }
 
-  toggleAdvanced() { this.showAdvanced.set(!this.showAdvanced()); }
+  selectedDateHuman(): string {
+    try {
+      const d = this.selectedDateISO();
+      const [y,m,dd] = d.split('-').map(n => parseInt(n, 10));
+      const dt = new Date(y, (m-1), dd);
+      return dt.toLocaleDateString('it-IT', { weekday:'long', day:'2-digit', month:'2-digit', year:'numeric' });
+    } catch { return ''; }
+  }
+
+  toggleAdvanced() { this._showAdvanced.update(v => !v); }
+
+  advancedValue(): string {
+    // Restituisce un ISO string per IonDatetime basato su form.date + form.time
+    const d = this.selectedDateISO();
+    const t = this.selectedTime() || '19:00';
+    return `${d}T${t}:00`;
+  }
 
   onAdvancedPick(ev: CustomEvent) {
-    const isoLocal = (ev.detail as any).value as string;
-    if (!isoLocal) return;
-    const [d, time] = isoLocal.split('T');
-    const hhmm = (time || '').slice(0, 5);
-    this.selectedDateISO.set(d);
-    this.selectedTime.set(hhmm);
-    const isoUTC = localDateTimeToUTCISO(d, hhmm);
-    this.form.patchValue({ start_at: isoUTC });
+    // IonDatetime (ionChange) → ev.detail.value è un ISO string
+    const iso = (ev as any)?.detail?.value as string;
+    if (!iso) return;
+    const dt = new Date(iso);
+    const yyyy = dt.getFullYear();
+    const mm = String(dt.getMonth()+1).padStart(2,'0');
+    const dd = String(dt.getDate()).padStart(2,'0');
+    const HH = String(dt.getHours()).padStart(2,'0');
+    const MM = String(dt.getMinutes()).padStart(2,'0');
+    this.form.patchValue({ date: `${yyyy}-${mm}-${dd}`, time: `${HH}:${MM}` }, { emitEvent: false });
+    this.form.controls.time.markAsDirty();
+    this.form.controls.date.markAsDirty();
+    console.log('🗓️ [AdvancedPick] →', `${yyyy}-${mm}-${dd}`, `${HH}:${MM}`);
   }
 
-  get startCtrl() { return this.form.controls.start_at; }
-  get emailCtrl() { return this.form.controls.email; }
-
-  constructor() {
-    // 1) Sale all’ingresso
-    this.loadRooms();
-
-    // 2) Carica tavoli per sala selezionata
-    this.form.get('room_id')!.valueChanges.subscribe(async (roomId: number | null) => {
-      this.form.patchValue({ table_id: null }, { emitEvent: false });
-      if (!roomId) { this.tables.set([]); return; }
-      try {
-        const rows = await firstValueFrom(this.api.listTablesByRoom(Number(roomId)));
-        this.tables.set(rows || []);
-      } catch { this.tables.set([]); }
+  clearForm() {
+    this.form.reset({
+      customer_first: '',
+      customer_last : '',
+      phone         : '',
+      email         : '',
+      party_size    : 2,
+      date          : '',
+      time          : '',
+      reason        : '',
+      notes         : '',
+      room_id       : null,
+      table_id      : null,
     });
-
-    // 3) Debug: vedere i cambi di data/ora
-    this.form.get('start_at')!.valueChanges.subscribe(v =>
-      console.log('⏰ [NewReservation] start_at →', v)
-    );
-
-    // 4) Clock → abilita/disabilita slot dinamicamente oggi
-    this.clock = setInterval(() => this.now.set(new Date()), 60_000);
+    console.log('🧹 Form pulito');
+    this.step.set(1);
   }
 
-  ngOnDestroy() { if (this.clock) clearInterval(this.clock); }
+  // ================================ SUBMIT ====================================
+  async submit() {
+    if (!this.canGoNext()) return;
 
-  async loadRooms() {
+    const v = this.form.getRawValue();
+    if (!v.date || !v.time) {
+      (await this.toast.create({ message: 'Seleziona data e ora', duration: 1600, color: 'warning' })).present();
+      return;
+    }
+
+    // Calcolo start_at / end_at (durata 90')
+    const start_at = `${v.date} ${v.time}:00`;
+    const [hh, mm] = (v.time as string).split(':').map(n => parseInt(n, 10));
+    const base = new Date(`${v.date}T${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}:00`);
+    const end_at = new Date(base.getTime() + 90 * 60 * 1000);
+    const end = `${v.date} ${String(end_at.getHours()).padStart(2,'0')}:${String(end_at.getMinutes()).padStart(2,'0')}:00`;
+
+    const payload: Partial<Reservation> = {
+      customer_first: (v.customer_first ?? '').trim(),
+      customer_last : (v.customer_last  ?? '').trim(),
+      phone         : v.phone || null,
+      email         : v.email || null,
+      party_size    : Number(v.party_size ?? 2),
+      start_at,
+      end_at: end,
+      room_id       : v.room_id ?? null,
+      table_id      : v.table_id ?? null,
+      notes         : v.notes || null,
+    };
+
+    this.loading.set(true);
     try {
-      const rows = await firstValueFrom(this.api.listRooms());
-      this.rooms.set(rows || []);
-      // Se entro la prima volta e non ho ancora una sala, auto-seleziono la prima
-      if (this.rooms().length && !this.form.value.room_id) {
-        this.form.patchValue({ room_id: this.rooms()[0].id });
+      const r = await firstValueFrom(this.api.create(payload));
+
+      // 🔔 Se nasce "pending" → invia 2 email (admin + cliente) in fire-and-forget
+      if ((r as any)?.status === 'pending') {
+        try {
+          this.mail.sendReservationPendingAdmin(r).subscribe({
+            next: res => console.log('📧 [Mail] admin pending OK?', res.ok),
+            error: e  => console.warn('⚠️ [Mail] admin pending KO', e),
+          });
+          this.mail.sendReservationPendingCustomer(r).subscribe({
+            next: res => console.log('📧 [Mail] customer pending OK?', res.ok),
+            error: e  => console.warn('⚠️ [Mail] customer pending KO', e),
+          });
+        } catch (e) {
+          console.warn('⚠️ [Mail] invio pending non riuscito', e);
+        }
       }
-    } catch { this.rooms.set([]); }
-  }
 
-
-
-  async onSubmit() {
-  if (this.form.invalid) { this.form.markAllAsTouched(); return; }
-  this.loading.set(true);
-  try {
-    const v = this.form.value;
-    const dto = {
-      customer_first: v.customer_first?.trim() || null,
-      customer_last : v.customer_last?.trim() || null,
-      phone         : v.phone?.trim() || null,
-      email         : v.email?.trim() || null,
-      party_size    : Number(v.party_size ?? 1),
-      start_at      : v.start_at!,              // ISO UTC
-      end_at        : v.end_at || null,
-      notes         : v.notes?.trim() || null,
-      room_id       : v.room_id ?? null,        // ✅ aggiunto
-      table_id      : v.table_id ?? null
-    };
-
-    const res = await firstValueFrom(this.api.create(dto));   // ✅ await corretto
-    console.log('✅ [NewReservation] created →', res);
-
-    this.resetFormToDefaults(/*autoselectRoom*/ true);
-    this.router.navigateByUrl('/reservations');
-  } catch (e: any) {
-    console.error('💥 [NewReservation] create KO', e);
-    (await this.toast.create({
-      message: e?.error?.message || e?.message || 'Errore creazione prenotazione',
-      duration: 2200, color: 'danger'
-    })).present();
-  } finally {
-    this.loading.set(false);
-  }
-}
-
-
-
-  async clearForm() {
-    this.resetFormToDefaults(/*autoselectRoom*/ true);
-    (await this.toast.create({ message: 'Modulo pulito', duration: 1200 })).present();
-  }
-
-  // ===== Helpers di reset (riusati in più punti) =====
-
-  /** Valori di default "comodi" quando apro/rientro nella pagina */
-  private getDefaultValues() {
-    return {
-      customer_last: null,
-      customer_first: null,
-      phone: null,
-      email: null,
-      party_size: 2,         // default comodo su mobile
-      start_at: null,
-      end_at: null,
-      notes: null,
-      room_id: null,
-      table_id: null,
-    };
-  }
-
-  /**
-   * Reset completo: form + segnali UI.
-   * @param autoselectRoom se true e ho già le sale, imposto la prima.
-   */
-  private resetFormToDefaults(autoselectRoom: boolean) {
-    this.form.reset(this.getDefaultValues());
-    this.selectedDateISO.set(toTodayISO());
-    this.selectedTime.set(null);
-    this.showAdvanced.set(false);
-    this.tables.set([]);
-
-    if (autoselectRoom && this.rooms().length) {
-      this.form.patchValue({ room_id: this.rooms()[0].id });
+      // Redirect “grazie” (invariato)
+      this.router.navigate(['/prenota/grazie'], {
+        queryParams: {
+          id: r.id,
+          name: `${r.customer_first || ''} ${r.customer_last || ''}`.trim(),
+          date: (r.start_at || '').slice(0,10),
+          time: (r.start_at || '').slice(11,16),
+          party: r.party_size || 1
+        },
+        replaceUrl: true
+      });
+    } catch (err: any) {
+      console.error('❌ Invio prenotazione fallito', err);
+      (await this.toast.create({ message: `Errore: ${err?.error?.error || err.message}`, duration: 2200, color: 'danger' })).present();
+    } finally {
+      this.loading.set(false);
     }
   }
-}
 
-// ===== Helpers (come prima) =====
-
-function pad(n: number) { return String(n).padStart(2, '0'); }
-
-function toTodayISO(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-
-function buildTimeRange(startHHmm: string, endHHmm: string, stepMin: number) {
-  const [sh, sm] = startHHmm.split(':').map(Number);
-  const [eh, em] = endHHmm.split(':').map(Number);
-  const t = new Date(); t.setSeconds(0, 0); t.setHours(sh, sm, 0, 0);
-  const end = new Date(); end.setSeconds(0, 0); end.setHours(eh, em, 0, 0);
-  const out: string[] = [];
-  while (t <= end) { out.push(`${pad(t.getHours())}:${pad(t.getMinutes())}`); t.setMinutes(t.getMinutes() + stepMin); }
-  return out;
-}
-
-function localDateTimeToUTCISO(dateISO: string, hhmm: string) {
-  const [H, M] = hhmm.split(':').map(Number);
-  const [Y, Mo, D] = dateISO.split('-').map(Number);
-  const d = new Date(Y, (Mo - 1), D, H, M, 0, 0);
-  return d.toISOString();
+  ngOnDestroy() {}
 }

@@ -1,5 +1,10 @@
 // src/app/icons.ts
-// Registra le icone usate (evita fetch da CDN e 404 in prod)
+// ============================================================================
+// Registra le icone Ionicons usate nell'app per evitare fetch da CDN/404.
+// Nota: aggiungo alcune icone che già compaiono nei template (chevron*, checkmark,
+// mail, close, ecc.), così su iOS/desktop non hai placeholder vuoti.
+// ============================================================================
+
 import { addIcons } from 'ionicons';
 import {
   home,
@@ -12,10 +17,20 @@ import {
   qrCodeOutline,
   addOutline,
   calendarOutline,
-  documentTextOutline,   // 👈 aggiunte
-  createOutline,          // 👈 aggiunte
+  documentTextOutline,
+  createOutline,
   trashOutline,
-  saveOutline
+  saveOutline,
+  // 👇 nuove/mancanti
+  informationCircleOutline,
+  trashBinOutline,
+  closeOutline,
+  checkmarkCircleOutline,
+  mailOutline,
+  refreshOutline,
+  chevronBack,
+  chevronForward,
+  checkmark,
 } from 'ionicons/icons';
 
 export function registerAppIcons() {
@@ -30,11 +45,20 @@ export function registerAppIcons() {
     'qr-code-outline': qrCodeOutline,
     'add-outline': addOutline,
     'calendar-outline': calendarOutline,
-    'document-text-outline': documentTextOutline, // 👈 ora disponibili
-    'create-outline': createOutline    ,           // 👈 ora disponibili
-
-
+    'document-text-outline': documentTextOutline,
+    'create-outline': createOutline,
     'trash-outline': trashOutline,
     'save-outline': saveOutline,
+    // nuove
+    'information-circle-outline': informationCircleOutline,
+    'trash-bin-outline': trashBinOutline,
+    'close-outline': closeOutline,
+    'checkmark-circle-outline': checkmarkCircleOutline,
+    'mail-outline': mailOutline,
+    'refresh-outline': refreshOutline,
+    'chevron-back': chevronBack,
+    'chevron-forward': chevronForward,
+    'checkmark': checkmark,
   });
 }
+  

@@ -1,31 +1,68 @@
+<!-- src/app/features/orders/orders-live.page.html -->
 <ion-header>
   <ion-toolbar>
-    <ion-title>Ordini (live)</ion-title>
+    <ion-title>Ordinazioni (live)</ion-title>
     <ion-buttons slot="end">
       <ion-button routerLink="/orders/new">Nuovo</ion-button>
     </ion-buttons>
   </ion-toolbar>
+
+  <!-- Barra filtri mobile-first -->
+  <ion-toolbar>
+    <ion-searchbar placeholder="Cerca #id / cliente / canale"
+                   (ionInput)="q.set(($event.detail?.value || '').trim())">
+    </ion-searchbar>
+  </ion-toolbar>
+  <ion-toolbar>
+    <ion-segment [value]="status()">
+      <ion-segment-button value="all" (click)="status.set('all')">Tutti</ion-segment-button>
+      <ion-segment-button value="pending" (click)="status.set('pending')">Da confermare</ion-segment-button>
+      <ion-segment-button value="preparing" (click)="status.set('preparing')">In prep</ion-segment-button>
+      <ion-segment-button value="ready" (click)="status.set('ready')">Pronti</ion-segment-button>
+    </ion-segment>
+  </ion-toolbar>
+  <ion-toolbar>
+    <ion-label style="padding-left:12px">Periodo</ion-label>
+    <ion-select interface="popover" [value]="timeframe()" (ionChange)="timeframe.set($event.detail.value)">
+      <ion-select-option value="1h">Ultima ora</ion-select-option>
+      <ion-select-option value="3h">Ultime 3h</ion-select-option>
+      <ion-select-option value="today">Oggi</ion-select-option>
+      <ion-select-option value="7d">7 giorni</ion-select-option>
+      <ion-select-option value="all">Tutto</ion-select-option>
+    </ion-select>
+  </ion-toolbar>
 </ion-header>
 
 <ion-content>
-  <ion-list inset="true" *ngIf="rows().length; else empty">
-    <ion-item *ngFor="let o of rows(); trackBy: trackById" lines="full">
+  <ion-list inset="true" *ngIf="filtered().length; else empty">
+    <ion-item *ngFor="let o of filtered(); trackBy: trackById" lines="full">
       <ion-label>
-        <div style="display:flex; align-items:center; gap:10px">
+        <!-- Intestazione riga -->
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap: wrap">
+          <strong>#{{ o.id }}</strong>
+          <span>{{ o.customer_name }}</span>
           <ion-badge [color]="statusColor(o.status)">{{ o.status }}</ion-badge>
-          <div style="font-weight:600">#{{ o.id }} — {{ o.customer_name }}</div>
         </div>
-        <div style="font-size:12px; opacity:.75">
-          {{ o.created_at || '' }}
-          <span *ngIf="o.phone">· {{ o.phone }}</span>
-          <span *ngIf="o.channel">· {{ o.channel }}</span>
+        <!-- Meta -->
+        <div style="font-size:13px; opacity:.8">
+          {{ o.channel || 'admin' }} • {{ o.created_at | date:'dd/MM HH:mm' }}
         </div>
       </ion-label>
-      <ion-note slot="end">Totale: € {{ o.total | number:'1.2-2':'it-IT' }}</ion-note>
+
+      <!-- Totale + azioni -->
+      <div slot="end" style="display:flex; align-items:center; gap:8px">
+        <ion-note>€ {{ o.total | number:'1.2-2':'it-IT' }}</ion-note>
+        <ng-container *ngFor="let n of quickActions(o.status)">
+          <ion-button size="small" (click)="changeStatus(o, n)">
+            <ion-icon slot="start" [name]="n === 'cancelled' ? 'close-circle' : 'checkmark-circle'"></ion-icon>
+            {{ n }}
+          </ion-button>
+        </ng-container>
+      </div>
     </ion-item>
   </ion-list>
 
   <ng-template #empty>
-    <div style="padding:24px; opacity:.6">Nessun ordine.</div>
+    <div style="padding:16px; opacity:.7">Nessun ordine (filtri attivi?).</div>
   </ng-template>
 </ion-content>

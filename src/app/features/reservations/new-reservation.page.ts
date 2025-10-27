@@ -1,4 +1,3 @@
-// src/app/features/reservations/new-reservation.page.ts
 import { Component, inject, signal, computed, OnDestroy } from '@angular/core';
 import { FormBuilder, Validators, ReactiveFormsModule, AbstractControl } from '@angular/forms';
 import { Router, RouterLink } from '@angular/router';
@@ -12,16 +11,15 @@ import {
   IonContent, IonHeader, IonToolbar, IonTitle,
   IonItem, IonLabel, IonInput, IonButton, IonSelect, IonSelectOption,
   IonTextarea, IonDatetime, IonNote, IonList,
-  IonIcon, IonFab, IonFabButton, IonFabList, IonSegment, IonSegmentButton,
-  IonLoading
+  IonIcon, IonFab, IonFabButton, IonFabList
 } from '@ionic/angular/standalone';
 import { ToastController } from '@ionic/angular';
 
 // API FE
 import { ReservationsApi, Room, Table, Reservation } from '../../core/reservations/reservations.service';
 
-// UI
-import { DateQuickComponent } from '../reservations/_components/ui/date-quick/date-quick.component';
+// UI: date quick (7 giorni)
+import { DateQuickComponent } from '../../features/reservations/_components/ui/date-quick/date-quick.component';
 
 // Google contacts
 import {
@@ -39,7 +37,6 @@ import { WhatsAppService } from '../../core/notifications/whatsapp.service';
   selector: 'app-new-reservation',
   templateUrl: './new-reservation.page.html',
   imports: [
-    IonSegmentButton, IonSegment,
     ReactiveFormsModule, NgIf, NgFor, RouterLink,
     IonContent, IonHeader, IonToolbar, IonTitle,
     IonItem, IonLabel, IonInput, IonButton, IonSelect, IonSelectOption,
@@ -63,7 +60,7 @@ export class NewReservationPage implements OnDestroy {
   rooms   = signal<Room[]>([]);
   tables  = signal<Table[]>([]);
 
-  // ==== Google Contacts (parent-driven) ====
+  // ==== Google Contacts ====
   gcResults   = signal<GContactPick[]>([]);
   gcSearching = this.gcs.searching;
 
@@ -93,7 +90,7 @@ export class NewReservationPage implements OnDestroy {
   lunchSlots  = ['12:00','12:30','13:00','13:30','14:00'];
   dinnerSlots = ['19:00','19:30','20:00','20:30','21:00','21:30','22:00'];
 
-  // ==== Selezioni data/ora ====
+  // ==== UI data (data/ora) ====
   private pickedDateISO = signal<string>(this.todayISO());
   private pickedTime    = signal<string | null>(null);
 
@@ -109,21 +106,17 @@ export class NewReservationPage implements OnDestroy {
     this.pickedDateISO.set(dateISO);
     if (this.pickedTime()) this.patchStartFromPick();
   }
-
   onSelectTime(t: string) {
     this.pickedTime.set(t);
     this.patchStartFromPick();
   }
-
   isSlotDisabled(dateISO: string, t: string): boolean {
-    // Disabilito orari nel passato se la data selezionata è oggi
     const todayISO = this.todayISO();
     if (dateISO !== todayISO) return false;
     const now = new Date();
     const [hh, mm] = t.split(':').map(n => +n);
     return now.getHours() > hh || (now.getHours() === hh && now.getMinutes() > mm);
   }
-
   selectedDateHuman(): string {
     const [y,m,d] = this.pickedDateISO().split('-').map(n => +n);
     return new Intl.DateTimeFormat('it-IT', { weekday:'long', day:'2-digit', month:'2-digit', year:'numeric' })
@@ -178,6 +171,9 @@ export class NewReservationPage implements OnDestroy {
     try {
       const rooms = await firstValueFrom(this.api.listRooms());
       this.rooms.set(rooms || []);
+      if (this.rooms().length && !this.form.value.room_id) {
+        this.form.patchValue({ room_id: this.rooms()[0].id });
+      }
     } catch (e) {
       console.warn('Rooms load KO', e);
     }
@@ -197,23 +193,21 @@ export class NewReservationPage implements OnDestroy {
   }
 
   // ==== Submit ====
-  onSubmit() { this.submit(); } // alias per template (risolve TS2551)
+  onSubmit() { this.submit(); } // alias per template
 
   async submit() {
     if (this.form.invalid) { this.form.markAllAsTouched(); return; }
     this.loading.set(true);
     try {
-      // Normalizzo start/end per il BE: 'YYYY-MM-DDTHH:mm' → 'YYYY-MM-DD HH:mm:ss'
+      // Normalizzo 'YYYY-MM-DDTHH:mm' per il BE (o lascia così se già accetta ISO locale)
       const startIsoLocal = this.form.value.start_at as string; // es. 2025-10-26T20:00
-      const start = startIsoLocal.replace('T', ' ') + ':00';
-
       const payload = {
         customer_first: this.form.value.customer_first?.trim() || null,
         customer_last : this.form.value.customer_last?.trim()  || null,
         phone         : this.form.value.phone?.trim()          || null,
         email         : this.form.value.email?.trim()          || null,
         party_size    : this.form.value.party_size || 1,
-        start_at      : start,
+        start_at      : startIsoLocal, // mantieni "locale ISO" se il BE lo gestisce
         end_at        : null,
         room_id       : this.form.value.room_id || null,
         table_id      : this.form.value.table_id || null,
@@ -225,14 +219,13 @@ export class NewReservationPage implements OnDestroy {
 
       // === Notifiche anche su PENDING ===
       if (created?.status === 'pending') {
-        this.mail.sendReservationPendingAdmin(created).subscribe(r => {
+        this.mail.sendReservationPendingAdmin(created as Reservation).subscribe(r => {
           console.log('📧 [Mail] admin pending OK?', r.ok);
         });
-        this.mail.sendReservationPendingCustomer(created).subscribe(r => {
+        this.mail.sendReservationPendingCustomer(created as Reservation).subscribe(r => {
           console.log('📧 [Mail] customer pending OK?', r.ok);
         });
-        // WhatsApp (Twilio sandbox/production)
-        this.wa.sendReservationPending('twilio', created).subscribe(r => {
+        this.wa.sendReservationPending('twilio', created as Reservation).subscribe(r => {
           console.log('💬 [WA] pending OK?', r.ok);
         });
       }
@@ -240,7 +233,7 @@ export class NewReservationPage implements OnDestroy {
       this.router.navigate(['/reservations']);
     } catch (err: any) {
       const msg = err?.message || 'Errore creazione';
-      (await this.toast.create({ message: msg, duration: 2200 })).present();
+      (await this.toast.create({ message: msg, duration: 2200, color: 'danger' })).present();
     } finally {
       this.loading.set(false);
     }
@@ -261,6 +254,7 @@ export class NewReservationPage implements OnDestroy {
     });
     this.pickedDateISO.set(this.todayISO());
     this.pickedTime.set(null);
+    this.tables.set([]);
   }
 
   // ==== helpers ====
@@ -269,7 +263,6 @@ export class NewReservationPage implements OnDestroy {
     const v = `${this.pickedDateISO()}T${this.pickedTime()}`;
     this.form.patchValue({ start_at: v, end_at: null });
   }
-
   private todayISO(): string {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;

@@ -1,7 +1,7 @@
 // src/app/core/orders/types.ts
 // ============================================================================
-// Tipi condivisi per Ordini (FE)
-// - Ordini header / item / input / status
+// Tipi condivisi Ordini (FE)
+// - Header / Item / Input / Status
 // - Menu (categoria + item) per il builder
 // ============================================================================
 
@@ -17,7 +17,7 @@ export interface OrderItemInput {
   product_id?: number | null;
   name: string;
   qty: number;
-  price: number;           // € interi/decimali (BE usa DECIMAL(10,2))
+  price: number;           // € (BE DECIMAL(10,2))
   notes?: string | null;
 }
 
@@ -45,7 +45,6 @@ export interface Order extends OrderHeader {
     qty: number;
     price: number;
     notes?: string | null;
-    created_at?: string;
   }>;
 }
 
@@ -60,6 +59,8 @@ export interface OrderInput {
   items: OrderItemInput[];
 }
 
+// ==== menu per il builder ====================================================
+
 export interface MenuCategory {
   id: number;
   name: string;
@@ -68,9 +69,8 @@ export interface MenuCategory {
 
 export interface MenuItem {
   id: number;
-  category_id: number;
+  cat_id?: number | null;
   name: string;
-  price_cents: number; // per il carrello locale (cent)
-  description?: string | null;
-  sort?: number | null;
+  price: number;
+  desc?: string | null;
 }

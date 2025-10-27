@@ -7,7 +7,7 @@ import {
   IonSearchbar, IonSegment, IonSegmentButton,
   IonFab, IonFabButton, IonFabList
 } from '@ionic/angular/standalone';
-import { Router, RouterLink, NavigationEnd, ActivatedRoute } from '@angular/router'; // 🔧 CHANGED: +ActivatedRoute
+import { Router, RouterLink, NavigationEnd, ActivatedRoute } from '@angular/router';
 
 import { ModalController, ToastController, ActionSheetController, AlertController } from '@ionic/angular';
 import { StatusActionModalComponent } from './_components/status-action.modal';
@@ -39,13 +39,13 @@ import { DateQuickComponent } from './_components/ui/date-quick/date-quick.compo
 export class ReservationsListPage implements OnInit, OnDestroy {
   private api = inject(ReservationsApi);
   private router = inject(Router);
-  private route  = inject(ActivatedRoute); // 🔧 NEW
+  private route  = inject(ActivatedRoute);
   private modalCtrl = inject(ModalController);
   private toast = inject(ToastController);
   private sheet = inject(ActionSheetController);
   private alert = inject(AlertController);
 
-  // 🔧 NEW: switch letti da query della lista (?force=&?notify=)
+  // 🔧 switch da query (?force=&?notify=)
   private forceDelete  = (this.route.snapshot.queryParamMap.get('force')  ?? '').toLowerCase() === 'true';
   private notifyDelete = (this.route.snapshot.queryParamMap.get('notify') ?? '').toLowerCase() !== 'false';
 
@@ -97,7 +97,7 @@ export class ReservationsListPage implements OnInit, OnDestroy {
     }
     if (p === 'custom') {
       const a = this.from() ?? '—';
-      const b = this.to() ?? '—';
+      const b = this.to()   ?? '—';
       return `${a} → ${b}`;
     }
     return 'Tutte le date';
@@ -202,99 +202,78 @@ export class ReservationsListPage implements OnInit, OnDestroy {
     await this.sendStatus(resv.id, action, reason);
   }
 
-  // 🔧 NEW: policy locale per il bottone di hard delete
+  // Policy locale per hard delete
   private canHardDelete(r: Reservation) {
     return r.status === 'cancelled' || this.forceDelete;
   }
 
   // Quick action sheet (stato + stampa singola + hard delete)
+  async openQuickStatus(resv: Reservation) {
+    const buttons: any[] = [
+      {
+        text: 'Accetta',
+        icon: 'checkmark-circle-outline',
+        handler: () => this.sendStatus(resv.id, 'accept')
+      },
+      {
+        text: 'Rifiuta…',
+        icon: 'close-circle-outline',
+        handler: async () => {
+          const reason = await this.askReason('reject');
+          await this.sendStatus(resv.id, 'reject', reason);
+        }
+      },
+      {
+        text: 'Cancella…',
+        icon: 'trash-outline',
+        handler: async () => {
+          const reason = await this.askReason('cancel');
+          await this.sendStatus(resv.id, 'cancel', reason);
+        }
+      },
+      // 🖨️ Stampa segnaposto singolo
+      {
+        text: 'Stampa segnaposto',
+        icon: 'print-outline',
+        handler: async () => {
+          if (this.printing()) return;
+          this.printing.set(true);
+          try {
+            (await this.toast.create({ message: 'Invio segnaposto…', duration: 900 })).present();
+            await firstValueFrom(this.api.printPlacecardOne(resv.id));
+            (await this.toast.create({ message: 'Segnaposto inviato ✅', duration: 1500 })).present();
+          } catch (err: any) {
+            console.error('🖨️❌ [List] printPlacecardOne KO', err);
+            (await this.toast.create({
+              message: `Errore stampa: ${err?.error?.error || err?.message || 'unknown'}`,
+              duration: 2500, color: 'danger'
+            })).present();
+          } finally {
+            this.printing.set(false);
+          }
+        }
+      },
+      {
+        text: 'Dettagli…',
+        icon: 'information-circle-outline',
+        handler: () => this.openStatusActions(resv)
+      },
+      { text: 'Chiudi', role: 'cancel' }
+    ];
 
-
-  // 🔧 FIX iOS: niente logica dentro gli handler del foglio azioni.
-// Metto solo "data.action" nei bottoni, poi gestisco tutto DOPO il dismiss.
-// Inoltre mode:'ios' per icone sempre visibili su iOS/MD.
-async openQuickStatus(resv: Reservation) {
-  const buttons: any[] = [
-    { text: 'Accetta',  icon: 'checkmark-circle-outline',      data: { action: 'accept'  } },
-    { text: 'Rifiuta…', icon: 'close-circle-outline',          data: { action: 'reject'  } },
-    { text: 'Cancella…',icon: 'trash-outline',                 data: { action: 'cancel'  } },
-    { text: 'Stampa segnaposto', icon: 'print-outline',        data: { action: 'print'   } },
-    { text: 'Dettagli…', icon: 'information-circle-outline',   data: { action: 'details' } },
-    // il cancel ha anche l'icona per coerenza visiva
-    { text: 'Chiudi', role: 'cancel', icon: 'close-outline' }
-  ];
-
-  // 🔧 NEW: aggiungo la voce “Elimina definitivamente” prima di Chiudi, se consentito
-  if (this.canHardDelete(resv)) {
-    buttons.splice(buttons.length - 1, 0, {
-      text: 'Elimina definitivamente',
-      icon: 'trash-bin-outline',
-      role: 'destructive',
-      data: { action: 'hardDelete' }
-    });
-  }
-
-  const sheet = await this.sheet.create({
-    header: 'Cambia stato / Azioni rapide',
-    mode: 'ios',               // 🔧 FIX iOS: icone sempre visibili
-    buttons
-  });
-
-  await sheet.present();
-
-  // ⤵️ Dopo il dismiss eseguo l'azione scelta (niente overlay dentro handler!)
-  const { data, role } = await sheet.onDidDismiss();
-  if (role === 'cancel' || !data?.action) return;
-
-  switch (data.action) {
-    case 'accept':
-      await this.sendStatus(resv.id, 'accept');
-      break;
-
-    case 'reject': {
-      const reason = await this.askReason('reject');
-      await this.sendStatus(resv.id, 'reject', reason);
-      break;
+    // “Elimina definitivamente” se consentito
+    if (this.canHardDelete(resv)) {
+      buttons.splice(buttons.length - 1, 0, {
+        text: 'Elimina definitivamente',
+        icon: 'trash-bin-outline',
+        role: 'destructive',
+        handler: () => this.onHardDelete(resv)
+      });
     }
 
-    case 'cancel': {
-      const reason = await this.askReason('cancel');
-      await this.sendStatus(resv.id, 'cancel', reason);
-      break;
-    }
-
-    case 'print':
-      await this.handlePrintOne(resv.id);
-      break;
-
-    case 'details':
-      await this.openStatusActions(resv);
-      break;
-
-    case 'hardDelete':
-      await this.onHardDelete(resv);
-      break;
+    const sheet = await this.sheet.create({ header: 'Cambia stato / Azioni rapide', buttons });
+    await sheet.present();
   }
-}
-
-// 🔧 piccola helper per tenere pulito lo switch
-private async handlePrintOne(id: number) {
-  if (this.printing()) return;
-  this.printing.set(true);
-  try {
-    (await this.toast.create({ message: 'Invio segnaposto…', duration: 900 })).present();
-    await firstValueFrom(this.api.printPlacecardOne(id));
-    (await this.toast.create({ message: 'Segnaposto inviato ✅', duration: 1500 })).present();
-  } catch (err: any) {
-    (await this.toast.create({
-      message: `Errore stampa: ${err?.error?.error || err?.message || 'unknown'}`,
-      duration: 2500, color: 'danger'
-    })).present();
-  } finally {
-    this.printing.set(false);
-  }
-}
-
 
   private async askReason(kind: 'reject'|'cancel'): Promise<string | undefined> {
     const header = kind === 'reject' ? 'Motivo rifiuto' : 'Motivo cancellazione';
@@ -329,7 +308,7 @@ private async handlePrintOne(id: number) {
     });
   }
 
-  // 🔧 NEW: hard delete con conferma
+  // Hard delete con conferma
   private async onHardDelete(resv: Reservation) {
     const alert = await this.alert.create({
       header: 'Eliminare definitivamente?',
@@ -437,12 +416,12 @@ private async handlePrintOne(id: number) {
     }
   }
 
-  // 👉 Navigazione all’edit quando si tocca la riga
+  // Navigazione all’edit quando si tocca la riga
   openEdit(r: Reservation) {
     this.router.navigate(['/reservations', r.id, 'edit']);
   }
 
-  // 👉 Click sul pulsante “Azioni”: blocca la riga e apri il quick sheet
+  // Click sul bottone “Azioni”: blocca la riga e apri il quick sheet
   onActionsClick(ev: Event, r: Reservation) {
     ev.stopPropagation();
     ev.preventDefault();

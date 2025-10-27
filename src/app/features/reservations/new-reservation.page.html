@@ -79,7 +79,7 @@
           <div style="font-size:.8rem; font-weight:400">Oggi: {{ todayLabel() }}</div>
         </ion-label>
 
-        <!-- quick 7 giorni -->
+        <!-- Quick day picker (7 giorni) -->
         <app-date-quick
           [selected]="selectedDateISO()"
           (selectedChange)="onQuickDate($event)">

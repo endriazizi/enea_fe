@@ -44,8 +44,9 @@ export class ShellPage {
     { label: 'Dashboard',            path: '/diagnostics',      icon: 'home' },
     { label: 'Lista prenotazioni',   path: '/reservations',     icon: 'list',       badge: true },
     { label: 'Nuova prenotazione',   path: '/reservations/new', icon: 'add-circle' },
-    // { label: 'Ordini (live)',      path: '/orders',           icon: 'time-outline' },
-    // { label: 'Nuovo ordine',       path: '/orders/new',       icon: 'create-outline' },
+    { label: 'Ordini (live)',      path: '/orders',           icon: 'time-outline' },
+    { label: 'Nuovo ordine',       path: '/orders/new',       icon: 'create-outline' },
+    { label: 'Prenota',      path: '/prenota',           icon: 'time-outline' },
   ];
 
   // === Badge "in attesa" =====================================================

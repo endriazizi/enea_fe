@@ -1,119 +1,141 @@
+<!-- src/app/features/orders/order-builder.page.html -->
 <ion-header>
   <ion-toolbar>
     <ion-title>Nuovo ordine</ion-title>
-    <ion-buttons slot="start">
-      <ion-back-button defaultHref="/orders"></ion-back-button>
+    <ion-buttons slot="end">
+      <ion-button routerLink="/orders">Live</ion-button>
     </ion-buttons>
   </ion-toolbar>
 </ion-header>
 
 <ion-content>
-  <div style="max-width:820px;margin:0 auto;padding:12px;">
-    <!-- Stepper -->
-    <ion-segment [value]="currentStep()">
-      <ion-segment-button value="1"><ion-label>Dati</ion-label></ion-segment-button>
-      <ion-segment-button value="2"><ion-label>Articoli</ion-label></ion-segment-button>
-      <ion-segment-button value="3"><ion-label>Conferma</ion-label></ion-segment-button>
+  <div style="max-width: 1100px; margin: 0 auto; padding: 12px">
+    <!-- Step indicator -->
+    <ion-segment value="{{ currentStep() }}">
+      <ion-segment-button value="1">Contatti</ion-segment-button>
+      <ion-segment-button value="2">Ordine</ion-segment-button>
+      <ion-segment-button value="3">Conferma</ion-segment-button>
     </ion-segment>
 
-    <div style="height:10px"></div>
+    <!-- STEP 1 -->
+    <ion-list inset="true" *ngIf="currentStep() === 1" style="margin-top: 12px">
+      <ion-item>
+        <ion-label position="stacked">Nome e cognome <span style="color:#dc2626">*</span></ion-label>
+        <ion-input placeholder="Mario Rossi" (ionInput)="onNameInput($event)"></ion-input>
+      </ion-item>
+      <ion-item>
+        <ion-label position="stacked">Telefono</ion-label>
+        <ion-input type="tel" inputmode="tel" placeholder="+39 333 1234567" (ionInput)="onPhoneInput($event)"></ion-input>
+      </ion-item>
+      <ion-item>
+        <ion-label position="stacked">Email</ion-label>
+        <ion-input type="email" inputmode="email" placeholder="mario@example.com" (ionInput)="onEmailInput($event)"></ion-input>
+      </ion-item>
+      <ion-item>
+        <ion-label position="stacked">Note</ion-label>
+        <ion-textarea autoGrow="true" placeholder="Es. niente cipolla" (ionInput)="onNoteInput($event)"></ion-textarea>
+      </ion-item>
+      <div style="display:flex; gap:8px; padding: 10px 8px">
+        <ion-button (click)="goNext()" [disabled]="!canNextFrom1()">Avanti</ion-button>
+      </div>
+    </ion-list>
 
-    <ng-container [ngSwitch]="currentStep()">
-      <!-- STEP 1: Dati cliente -->
-      <ng-container *ngSwitchCase="1">
-        <ion-list inset="true">
-          <ion-item lines="full">
-            <ion-label position="stacked">Nome cliente *</ion-label>
-            <ion-input placeholder="Mario Rossi"
-                       (ionInput)="onNameInput($event)"></ion-input>
-          </ion-item>
+    <!-- STEP 2 — layout responsive: mobile=stack, desktop=2 colonne -->
+    <div *ngIf="currentStep() === 2" style="margin-top: 12px">
+      <ion-grid fixed>
+        <ion-row>
+          <ion-col size="12" sizeMd="7">
+            <ion-list inset="true">
+              <ion-item lines="none">
+                <ion-label>Catalogo</ion-label>
+              </ion-item>
 
-          <ion-item lines="full" style="margin-top:8px">
-            <ion-label position="stacked">Telefono</ion-label>
-            <ion-input type="tel" inputmode="tel"
-                       placeholder="+39 333 123 4567"
-                       (ionInput)="onPhoneInput($event)"></ion-input>
-          </ion-item>
+              <!-- Categorie -->
+              <div style="display:flex; gap: 8px; flex-wrap: wrap; padding: 8px 12px">
+                <ion-button
+                  [fill]="selectedCat()==='all' ? 'solid':'outline'"
+                  size="small"
+                  (click)="selectedCat.set('all')">Tutte</ion-button>
 
-          <ion-item lines="full" style="margin-top:8px">
-            <ion-label position="stacked">Note</ion-label>
-            <ion-textarea autoGrow="true"
-                          placeholder="Es. senza cipolla"
-                          (ionInput)="onNoteInput($event)"></ion-textarea>
-          </ion-item>
-        </ion-list>
-      </ng-container>
+                <ion-button
+                  *ngFor="let c of categories()"
+                  [fill]="selectedCat()===c.id ? 'solid':'outline'"
+                  size="small"
+                  (click)="selectedCat.set(c.id)">
+                  {{ c.name }}
+                </ion-button>
+              </div>
 
-      <!-- STEP 2: Articoli (mock) -->
-      <ng-container *ngSwitchCase="2">
-        <ion-list inset="true">
-          <ion-item>
-            <ion-label>Articoli</ion-label>
-            <ion-note slot="end">Totale: € {{ total() | number:'1.2-2':'it-IT' }}</ion-note>
-          </ion-item>
+              <!-- Items -->
+              <ion-item *ngFor="let m of itemsFiltered()" lines="full">
+                <ion-label>
+                  <div style="display:flex; justify-content:space-between; align-items:center">
+                    <span>{{ m.name }}</span>
+                    <span>€ {{ m.price | number:'1.2-2':'it-IT' }}</span>
+                  </div>
+                  <div *ngIf="m.desc" style="font-size:12px; opacity:.75">{{ m.desc }}</div>
+                </ion-label>
+                <ion-buttons slot="end">
+                  <ion-button fill="outline" size="small" (click)="decItem(m.id)">–</ion-button>
+                  <ion-button size="small" (click)="addItem(m)">+</ion-button>
+                </ion-buttons>
+              </ion-item>
+            </ion-list>
+          </ion-col>
 
-          <div style="display:flex;gap:8px;padding:12px;flex-wrap:wrap;">
-            <ion-button size="default" (click)="addPreset('Margherita', 6.5)">+ Margherita</ion-button>
-            <ion-button size="default" (click)="addPreset('Diavola', 7.5)">+ Diavola</ion-button>
-            <ion-button size="default" (click)="addPreset('Prosciutto', 8.0)">+ Prosciutto</ion-button>
-          </div>
+          <ion-col size="12" sizeMd="5">
+            <ion-list inset="true">
+              <ion-item lines="full">
+                <ion-label>Carrello</ion-label>
+              </ion-item>
 
-          <ion-item *ngFor="let it of items()" lines="full">
-            <ion-label>
-              {{ it.name }} × {{ it.qty }}
-              <div style="font-size:12px;opacity:.7">€ {{ (it.price * it.qty) | number:'1.2-2':'it-IT' }}</div>
-            </ion-label>
-            <ion-buttons slot="end">
-              <ion-button fill="outline" (click)="decItem(it.name, it.price)">
-                <ion-icon name="remove-circle" slot="icon-only"></ion-icon>
-              </ion-button>
-            </ion-buttons>
-          </ion-item>
-        </ion-list>
-      </ng-container>
+              <ion-item *ngFor="let r of cart()" lines="full">
+                <ion-label>{{ r.name }} × {{ r.qty }}</ion-label>
+                <ion-buttons slot="end">
+                  <ion-button fill="outline" size="small" (click)="decItem(r.id)">–</ion-button>
+                  <!-- ✅ NIENTE cast in template: uso helper TS -->
+                  <ion-button size="small" (click)="incItem(r.id, r.name, r.price)">+</ion-button>
+                </ion-buttons>
+                <ion-note slot="end" style="margin-left:8px">€ {{ (r.qty * r.price) | number:'1.2-2':'it-IT' }}</ion-note>
+              </ion-item>
 
-      <!-- STEP 3: Conferma -->
-      <ng-container *ngSwitchCase="3">
-        <ion-list inset="true">
-          <ion-item>
-            <ion-label>
-              <div style="font-weight:600">{{ customerName() || '—' }}</div>
-              <div style="font-size:12px;opacity:.7">{{ customerPhone() || '' }}</div>
-            </ion-label>
-            <ion-note slot="end">Totale: € {{ total() | number:'1.2-2':'it-IT' }}</ion-note>
-          </ion-item>
+              <ion-item>
+                <ion-label><strong>Totale</strong></ion-label>
+                <ion-note slot="end"><strong>€ {{ total() | number:'1.2-2':'it-IT' }}</strong></ion-note>
+              </ion-item>
 
-          <ion-item lines="none" *ngFor="let it of items()">
-            <ion-label>{{ it.name }} × {{ it.qty }}</ion-label>
-            <ion-note slot="end">€ {{ (it.price * it.qty) | number:'1.2-2':'it-IT' }}</ion-note>
-          </ion-item>
-
-          <ion-item lines="none" *ngIf="note()">
-            <ion-label>Note</ion-label>
-            <ion-note slot="end">{{ note() }}</ion-note>
-          </ion-item>
-        </ion-list>
-
-        <ion-note *ngIf="errorMsg()" color="danger" style="display:block;margin:8px 12px;">
-          {{ errorMsg() }}
-        </ion-note>
-
-        <div style="padding:12px;">
-          <ion-button expand="block" size="large" [disabled]="loading()" (click)="submit()">
-            {{ loading() ? 'Invio…' : 'Conferma e crea' }}
-          </ion-button>
-        </div>
-      </ng-container>
-
-      <ng-container *ngSwitchDefault>
-        <div style="padding:20px;opacity:.6">Step non valido.</div>
-      </ng-container>
-    </ng-container>
-
-    <!-- Navigazione step -->
-    <div style="display:flex;gap:10px;position:sticky;bottom:0;background:var(--ion-color-step-50,#fff);padding:10px;border-top:1px solid rgba(0,0,0,.06);">
-      <ion-button fill="outline" [disabled]="currentStep()===1" (click)="prev()">Indietro</ion-button>
-      <ion-button [disabled]="currentStep()===3" (click)="next()">Avanti</ion-button>
+              <div style="display:flex; gap:8px; padding: 10px 8px">
+                <ion-button fill="outline" (click)="goPrev()">Indietro</ion-button>
+                <ion-button (click)="goNext()" [disabled]="!canNextFrom2()">Avanti</ion-button>
+              </div>
+            </ion-list>
+          </ion-col>
+        </ion-row>
+      </ion-grid>
     </div>
+
+    <!-- STEP 3 -->
+    <ion-list inset="true" *ngIf="currentStep() === 3" style="margin-top: 12px">
+      <ion-item lines="none"><ion-label>Riepilogo</ion-label></ion-item>
+      <ion-item><ion-label>Cliente</ion-label><ion-note slot="end">{{ customerName() }}</ion-note></ion-item>
+      <ion-item><ion-label>Telefono</ion-label><ion-note slot="end">{{ customerPhone() }}</ion-note></ion-item>
+      <ion-item><ion-label>Email</ion-label><ion-note slot="end">{{ customerEmail() }}</ion-note></ion-item>
+
+      <ion-item *ngFor="let r of cart()" lines="full">
+        <ion-label>{{ r.name }} × {{ r.qty }}</ion-label>
+        <ion-note slot="end">€ {{ (r.qty * r.price) | number:'1.2-2':'it-IT' }}</ion-note>
+      </ion-item>
+      <ion-item>
+        <ion-label><strong>Totale</strong></ion-label>
+        <ion-note slot="end"><strong>€ {{ total() | number:'1.2-2':'it-IT' }}</strong></ion-note>
+      </ion-item>
+
+      <div style="display:flex; gap:8px; padding: 10px 8px">
+        <ion-button fill="outline" (click)="goPrev()">Indietro</ion-button>
+        <ion-button (click)="submit()" [disabled]="loading()">
+          {{ loading() ? 'Invio…' : 'Conferma e crea' }}
+        </ion-button>
+      </div>
+    </ion-list>
   </div>
 </ion-content>

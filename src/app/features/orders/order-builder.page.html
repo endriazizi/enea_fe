@@ -1,141 +1,108 @@
 <!-- src/app/features/orders/order-builder.page.html -->
+
 <ion-header>
   <ion-toolbar>
-    <ion-title>Nuovo ordine</ion-title>
-    <ion-buttons slot="end">
-      <ion-button routerLink="/orders">Live</ion-button>
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="/orders"></ion-back-button>
     </ion-buttons>
+    <ion-title>Nuovo ordine</ion-title>
   </ion-toolbar>
 </ion-header>
 
 <ion-content>
-  <div style="max-width: 1100px; margin: 0 auto; padding: 12px">
-    <!-- Step indicator -->
-    <ion-segment value="{{ currentStep() }}">
-      <ion-segment-button value="1">Contatti</ion-segment-button>
-      <ion-segment-button value="2">Ordine</ion-segment-button>
-      <ion-segment-button value="3">Conferma</ion-segment-button>
-    </ion-segment>
+  <div style="max-width: 980px; margin: 0 auto; padding: 12px; display: grid; gap: 12px; grid-template-columns: 1fr;">
 
-    <!-- STEP 1 -->
-    <ion-list inset="true" *ngIf="currentStep() === 1" style="margin-top: 12px">
-      <ion-item>
-        <ion-label position="stacked">Nome e cognome <span style="color:#dc2626">*</span></ion-label>
-        <ion-input placeholder="Mario Rossi" (ionInput)="onNameInput($event)"></ion-input>
+    <!-- ==== Anagrafica ===================================================== -->
+    <ion-list inset="true">
+      <ion-item lines="full">
+        <ion-label position="stacked">Nome cliente</ion-label>
+        <ion-input placeholder="Mario Rossi"
+          (ionInput)="customerName.set(($any($event).detail?.value ?? ''))">
+        </ion-input>
       </ion-item>
-      <ion-item>
+
+      <ion-item lines="full">
         <ion-label position="stacked">Telefono</ion-label>
-        <ion-input type="tel" inputmode="tel" placeholder="+39 333 1234567" (ionInput)="onPhoneInput($event)"></ion-input>
+        <ion-input type="tel" inputmode="tel" placeholder="+39 …"
+          (ionInput)="customerPhone.set(($any($event).detail?.value ?? ''))">
+        </ion-input>
       </ion-item>
-      <ion-item>
-        <ion-label position="stacked">Email</ion-label>
-        <ion-input type="email" inputmode="email" placeholder="mario@example.com" (ionInput)="onEmailInput($event)"></ion-input>
-      </ion-item>
-      <ion-item>
+
+      <ion-item lines="full">
         <ion-label position="stacked">Note</ion-label>
-        <ion-textarea autoGrow="true" placeholder="Es. niente cipolla" (ionInput)="onNoteInput($event)"></ion-textarea>
+        <ion-textarea autoGrow="true" placeholder="Es. senza cipolla"
+          (ionInput)="note.set(($any($event).detail?.value ?? ''))">
+        </ion-textarea>
       </ion-item>
-      <div style="display:flex; gap:8px; padding: 10px 8px">
-        <ion-button (click)="goNext()" [disabled]="!canNextFrom1()">Avanti</ion-button>
-      </div>
+
+      <ion-note style="margin:6px 12px 8px; display:block; opacity:.7">
+        Compila almeno il nome e aggiungi un prodotto al carrello.
+      </ion-note>
     </ion-list>
 
-    <!-- STEP 2 — layout responsive: mobile=stack, desktop=2 colonne -->
-    <div *ngIf="currentStep() === 2" style="margin-top: 12px">
-      <ion-grid fixed>
-        <ion-row>
-          <ion-col size="12" sizeMd="7">
-            <ion-list inset="true">
-              <ion-item lines="none">
-                <ion-label>Catalogo</ion-label>
-              </ion-item>
+    <!-- ==== Layout 2 colonne (desktop) =================================== -->
+    <div style="display:grid; grid-template-columns: 1fr; gap:12px;"
+         [style.grid-template-columns]="'1fr 1fr'">
 
-              <!-- Categorie -->
-              <div style="display:flex; gap: 8px; flex-wrap: wrap; padding: 8px 12px">
-                <ion-button
-                  [fill]="selectedCat()==='all' ? 'solid':'outline'"
-                  size="small"
-                  (click)="selectedCat.set('all')">Tutte</ion-button>
+      <!-- Catalogo -->
+      <ion-list inset="true">
+        <ion-item lines="none">
+          <ion-label>
+            <div style="font-weight:600">Catalogo</div>
+            <div style="font-size:12px; opacity:.7">Tap per aggiungere</div>
+          </ion-label>
+          <ion-badge color="medium">{{ menu().length }}</ion-badge>
+        </ion-item>
 
-                <ion-button
-                  *ngFor="let c of categories()"
-                  [fill]="selectedCat()===c.id ? 'solid':'outline'"
-                  size="small"
-                  (click)="selectedCat.set(c.id)">
-                  {{ c.name }}
-                </ion-button>
-              </div>
+        <ion-item *ngFor="let r of menu(); trackBy: trackByMenuName" lines="full">
+          <ion-label>
+            {{ r.name }}
+            <div style="font-size:12px; opacity:.7">€ {{ r.price | number:'1.2-2':'it-IT' }}</div>
+          </ion-label>
+          <ion-buttons slot="end">
+            <ion-button size="small" (click)="addItem(r)">+ aggiungi</ion-button>
+          </ion-buttons>
+        </ion-item>
+      </ion-list>
 
-              <!-- Items -->
-              <ion-item *ngFor="let m of itemsFiltered()" lines="full">
-                <ion-label>
-                  <div style="display:flex; justify-content:space-between; align-items:center">
-                    <span>{{ m.name }}</span>
-                    <span>€ {{ m.price | number:'1.2-2':'it-IT' }}</span>
-                  </div>
-                  <div *ngIf="m.desc" style="font-size:12px; opacity:.75">{{ m.desc }}</div>
-                </ion-label>
-                <ion-buttons slot="end">
-                  <ion-button fill="outline" size="small" (click)="decItem(m.id)">–</ion-button>
-                  <ion-button size="small" (click)="addItem(m)">+</ion-button>
-                </ion-buttons>
-              </ion-item>
-            </ion-list>
-          </ion-col>
+      <!-- Carrello -->
+      <ion-list inset="true">
+        <ion-item lines="none">
+          <ion-label>
+            <div style="font-weight:600">Carrello</div>
+            <div style="font-size:12px; opacity:.7">Totale: € {{ total() | number:'1.2-2':'it-IT' }}</div>
+          </ion-label>
+          <ion-buttons slot="end">
+            <ion-button fill="clear" size="small" (click)="clearCart()">Svuota</ion-button>
+          </ion-buttons>
+        </ion-item>
 
-          <ion-col size="12" sizeMd="5">
-            <ion-list inset="true">
-              <ion-item lines="full">
-                <ion-label>Carrello</ion-label>
-              </ion-item>
+        <ion-item *ngFor="let it of cart(); trackBy: trackByCartName" lines="full">
+          <ion-label>
+            {{ it.name }}
+            <div style="font-size:12px; opacity:.7">€ {{ it.price | number:'1.2-2':'it-IT' }}</div>
+          </ion-label>
+          <ion-buttons slot="end">
+            <ion-button size="small" (click)="dec(it)">-</ion-button>
+            <ion-badge color="primary">{{ it.qty }}</ion-badge>
+            <ion-button size="small" (click)="inc(it)">+</ion-button>
+            <ion-button color="danger" size="small" (click)="remove(it)">rimuovi</ion-button>
+          </ion-buttons>
+        </ion-item>
 
-              <ion-item *ngFor="let r of cart()" lines="full">
-                <ion-label>{{ r.name }} × {{ r.qty }}</ion-label>
-                <ion-buttons slot="end">
-                  <ion-button fill="outline" size="small" (click)="decItem(r.id)">–</ion-button>
-                  <!-- ✅ NIENTE cast in template: uso helper TS -->
-                  <ion-button size="small" (click)="incItem(r.id, r.name, r.price)">+</ion-button>
-                </ion-buttons>
-                <ion-note slot="end" style="margin-left:8px">€ {{ (r.qty * r.price) | number:'1.2-2':'it-IT' }}</ion-note>
-              </ion-item>
+        <ion-item lines="none" *ngIf="!cart().length">
+          <ion-label style="opacity:.7">Carrello vuoto</ion-label>
+        </ion-item>
+      </ion-list>
 
-              <ion-item>
-                <ion-label><strong>Totale</strong></ion-label>
-                <ion-note slot="end"><strong>€ {{ total() | number:'1.2-2':'it-IT' }}</strong></ion-note>
-              </ion-item>
-
-              <div style="display:flex; gap:8px; padding: 10px 8px">
-                <ion-button fill="outline" (click)="goPrev()">Indietro</ion-button>
-                <ion-button (click)="goNext()" [disabled]="!canNextFrom2()">Avanti</ion-button>
-              </div>
-            </ion-list>
-          </ion-col>
-        </ion-row>
-      </ion-grid>
     </div>
 
-    <!-- STEP 3 -->
-    <ion-list inset="true" *ngIf="currentStep() === 3" style="margin-top: 12px">
-      <ion-item lines="none"><ion-label>Riepilogo</ion-label></ion-item>
-      <ion-item><ion-label>Cliente</ion-label><ion-note slot="end">{{ customerName() }}</ion-note></ion-item>
-      <ion-item><ion-label>Telefono</ion-label><ion-note slot="end">{{ customerPhone() }}</ion-note></ion-item>
-      <ion-item><ion-label>Email</ion-label><ion-note slot="end">{{ customerEmail() }}</ion-note></ion-item>
-
-      <ion-item *ngFor="let r of cart()" lines="full">
-        <ion-label>{{ r.name }} × {{ r.qty }}</ion-label>
-        <ion-note slot="end">€ {{ (r.qty * r.price) | number:'1.2-2':'it-IT' }}</ion-note>
-      </ion-item>
-      <ion-item>
-        <ion-label><strong>Totale</strong></ion-label>
-        <ion-note slot="end"><strong>€ {{ total() | number:'1.2-2':'it-IT' }}</strong></ion-note>
-      </ion-item>
-
-      <div style="display:flex; gap:8px; padding: 10px 8px">
-        <ion-button fill="outline" (click)="goPrev()">Indietro</ion-button>
-        <ion-button (click)="submit()" [disabled]="loading()">
-          {{ loading() ? 'Invio…' : 'Conferma e crea' }}
-        </ion-button>
-      </div>
-    </ion-list>
+    <!-- CTA -->
+    <div style="padding: 0 4px 16px">
+      <ion-button expand="block" size="large"
+        [disabled]="busy() || !canSubmit()" (click)="submit()">
+        {{ busy() ? 'Invio…' : 'Conferma e crea' }} — € {{ total() | number:'1.2-2':'it-IT' }}
+      </ion-button>
+    </div>
   </div>
 </ion-content>

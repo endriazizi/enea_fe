@@ -1,68 +1,63 @@
 <!-- src/app/features/orders/orders-live.page.html -->
+
 <ion-header>
   <ion-toolbar>
-    <ion-title>Ordinazioni (live)</ion-title>
-    <ion-buttons slot="end">
-      <ion-button routerLink="/orders/new">Nuovo</ion-button>
+    <ion-buttons slot="start">
+      <ion-back-button defaultHref="/"></ion-back-button>
     </ion-buttons>
-  </ion-toolbar>
-
-  <!-- Barra filtri mobile-first -->
-  <ion-toolbar>
-    <ion-searchbar placeholder="Cerca #id / cliente / canale"
-                   (ionInput)="q.set(($event.detail?.value || '').trim())">
-    </ion-searchbar>
-  </ion-toolbar>
-  <ion-toolbar>
-    <ion-segment [value]="status()">
-      <ion-segment-button value="all" (click)="status.set('all')">Tutti</ion-segment-button>
-      <ion-segment-button value="pending" (click)="status.set('pending')">Da confermare</ion-segment-button>
-      <ion-segment-button value="preparing" (click)="status.set('preparing')">In prep</ion-segment-button>
-      <ion-segment-button value="ready" (click)="status.set('ready')">Pronti</ion-segment-button>
-    </ion-segment>
-  </ion-toolbar>
-  <ion-toolbar>
-    <ion-label style="padding-left:12px">Periodo</ion-label>
-    <ion-select interface="popover" [value]="timeframe()" (ionChange)="timeframe.set($event.detail.value)">
-      <ion-select-option value="1h">Ultima ora</ion-select-option>
-      <ion-select-option value="3h">Ultime 3h</ion-select-option>
-      <ion-select-option value="today">Oggi</ion-select-option>
-      <ion-select-option value="7d">7 giorni</ion-select-option>
-      <ion-select-option value="all">Tutto</ion-select-option>
-    </ion-select>
+    <ion-title>Ordini (live)</ion-title>
   </ion-toolbar>
 </ion-header>
 
 <ion-content>
-  <ion-list inset="true" *ngIf="filtered().length; else empty">
-    <ion-item *ngFor="let o of filtered(); trackBy: trackById" lines="full">
-      <ion-label>
-        <!-- Intestazione riga -->
-        <div style="display:flex; align-items:center; gap:8px; flex-wrap: wrap">
-          <strong>#{{ o.id }}</strong>
-          <span>{{ o.customer_name }}</span>
-          <ion-badge [color]="statusColor(o.status)">{{ o.status }}</ion-badge>
-        </div>
-        <!-- Meta -->
-        <div style="font-size:13px; opacity:.8">
-          {{ o.channel || 'admin' }} • {{ o.created_at | date:'dd/MM HH:mm' }}
-        </div>
-      </ion-label>
+  <div style="max-width: 980px; margin: 0 auto; padding: 12px; display: grid; gap: 12px;">
 
-      <!-- Totale + azioni -->
-      <div slot="end" style="display:flex; align-items:center; gap:8px">
-        <ion-note>€ {{ o.total | number:'1.2-2':'it-IT' }}</ion-note>
-        <ng-container *ngFor="let n of quickActions(o.status)">
-          <ion-button size="small" (click)="changeStatus(o, n)">
-            <ion-icon slot="start" [name]="n === 'cancelled' ? 'close-circle' : 'checkmark-circle'"></ion-icon>
-            {{ n }}
-          </ion-button>
-        </ng-container>
-      </div>
-    </ion-item>
-  </ion-list>
+    <!-- Search + tabs stato -->
+    <ion-searchbar placeholder="Cerca #id / cliente / canale"
+      (ionInput)="q.set(($any($event).detail?.value ?? '').toString()); reload()">
+    </ion-searchbar>
 
-  <ng-template #empty>
-    <div style="padding:16px; opacity:.7">Nessun ordine (filtri attivi?).</div>
-  </ng-template>
+    <ion-segment value="{{ status() }}" (ionChange)="onStatusTab($any($event).detail?.value)">
+      <ion-segment-button value="all">TUTTI</ion-segment-button>
+      <ion-segment-button value="pending">PENDING</ion-segment-button>
+      <ion-segment-button value="confirmed">CONFIRM</ion-segment-button>
+      <ion-segment-button value="preparing">PREP</ion-segment-button>
+      <ion-segment-button value="ready">READY</ion-segment-button>
+      <ion-segment-button value="completed">DONE</ion-segment-button>
+      <ion-segment-button value="cancelled">CANCEL</ion-segment-button>
+    </ion-segment>
+
+    <!-- timeframe semplice -->
+    <div style="display:flex; gap:8px; align-items:center;">
+      <ion-button [fill]="hours()===6?'solid':'outline'"  (click)="onHoursChange(6)">6H</ion-button>
+      <ion-button [fill]="hours()===12?'solid':'outline'" (click)="onHoursChange(12)">12H</ion-button>
+      <ion-button [fill]="hours()===24?'solid':'outline'" (click)="onHoursChange(24)">24H</ion-button>
+      <ion-note style="opacity:.7">Live di default: <strong>6H</strong></ion-note>
+    </div>
+
+    <!-- Lista ordini -->
+    <ion-list inset="true">
+      <ion-item *ngFor="let o of filtered(); trackBy: trackById" lines="full">
+        <ion-label>
+          <div>
+            <ion-badge [color]="statusColor(o.status)">{{ o.status }}</ion-badge>
+            <strong> #{{ o.id }}</strong> — {{ o.customer_name }}
+          </div>
+          <div style="font-size:12px; opacity:.7">
+            € {{ o.total | number:'1.2-2':'it-IT' }} • {{ o.channel || 'admin' }}
+          </div>
+        </ion-label>
+
+        <!-- Azioni rapide -->
+        <ion-buttons slot="end">
+          <ion-button size="small" (click)="patchStatus(o, 'confirmed')">confirmed</ion-button>
+          <ion-button size="small" color="danger" (click)="patchStatus(o, 'cancelled')">cancelled</ion-button>
+        </ion-buttons>
+      </ion-item>
+
+      <ion-item lines="none" *ngIf="!filtered().length">
+        <ion-label style="opacity:.7">Nessun ordine</ion-label>
+      </ion-item>
+    </ion-list>
+  </div>
 </ion-content>

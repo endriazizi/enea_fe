@@ -1,30 +1,39 @@
 // src/app/features/orders/order-builder.page.ts
-// ============================================================================
-// OrderBuilderPage — 3 step (Contatti → Ordine → Conferma)
-// - Step 1: Cliente (nome obbligatorio)
-// - Step 2: Menu reale (API) con fallback mock, carrello con +/-
-// - Step 3: Riepilogo e invio → POST /api/orders → redirect a /orders
-// UI: mobile-first; su desktop 2 colonne (catalogo a sinistra, carrello a destra)
-// ============================================================================
+//
+// OrderBuilderPage — builder ordini (mobile-first, desktop 2-colonne)
+// - Catalogo: tenta getMenu(); fallback mock se 404
+// - Carrello: +/- articoli, totale, persistenza in sessionStorage
+// - Submit: POST /api/orders poi redirect → /orders
+// Stile: commenti lunghi, Signals + log con emoji.
 
 import { Component, inject, signal, computed } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
-
-// Angular / Common
 import { NgIf, NgFor, DecimalPipe } from '@angular/common';
 
-// Ionic
 import {
   IonContent, IonHeader, IonToolbar, IonTitle,
-  IonList, IonItem, IonLabel, IonInput, IonTextarea,
-  IonBadge, IonButtons, IonButton, IonNote, IonSegment, IonSegmentButton,
-  IonGrid, IonRow, IonCol
+  IonItem, IonLabel, IonInput, IonTextarea, IonNote, IonBadge,
+  IonList, IonButtons, IonButton, IonBackButton
 } from '@ionic/angular/standalone';
 
-import { OrdersApi } from '../../core/orders/orders.service';
-import { MenuCategory, MenuItem, OrderInput } from '../../core/orders/types';
+import { OrdersApi, MenuItem, OrderItem, CreateOrderDto } from '../../core/orders/orders.service';
 
-type Step = 1 | 2 | 3;
+type CartItem = OrderItem & { name: string };
+
+// ---- helpers ----------------------------------------------------------------
+
+function toNumber(v: any): number | null {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+function loadCart(): CartItem[] {
+  try { return JSON.parse(sessionStorage.getItem('cart') || '[]'); } catch { return []; }
+}
+function saveCart(rows: CartItem[]) {
+  try { sessionStorage.setItem('cart', JSON.stringify(rows)); } catch {}
+}
+
+// -----------------------------------------------------------------------------
 
 @Component({
   standalone: true,
@@ -33,158 +42,88 @@ type Step = 1 | 2 | 3;
   imports: [
     // Angular
     NgIf, NgFor, DecimalPipe, RouterLink,
-    // Ionic
+    // Ionic (includo TUTTO ciò che uso in html)
     IonContent, IonHeader, IonToolbar, IonTitle,
-    IonList, IonItem, IonLabel, IonInput, IonTextarea,
-    IonBadge, IonButtons, IonButton, IonNote, IonSegment, IonSegmentButton,
-    IonGrid, IonRow, IonCol,
+    IonItem, IonLabel, IonInput, IonTextarea, IonNote, IonBadge,
+    IonList, IonButtons, IonButton, IonBackButton,
   ]
 })
 export class OrderBuilderPage {
   private api = inject(OrdersApi);
   private router = inject(Router);
 
-  // ===== Stepper =============================================================
-  readonly currentStep = signal<Step>(1);
-  goNext() { this.currentStep.set(this.currentStep() === 3 ? 3 : (this.currentStep() + 1) as Step); }
-  goPrev() { this.currentStep.set(this.currentStep() === 1 ? 1 : (this.currentStep() - 1) as Step); }
+  // campi anagrafica
+  readonly customerName = signal<string>('');
+  readonly customerPhone = signal<string>('');
+  readonly note = signal<string>('');
 
-  // ===== Dati cliente ========================================================
-  customerName = signal('');
-  customerPhone = signal('');
-  customerEmail = signal('');
-  note = signal('');
+  // stato invio
+  readonly busy = signal<boolean>(false);
 
-  onNameInput(ev: CustomEvent)  { this.customerName.set(String((ev as any)?.detail?.value ?? '')); }
-  onPhoneInput(ev: CustomEvent) { this.customerPhone.set(String((ev as any)?.detail?.value ?? '')); }
-  onEmailInput(ev: CustomEvent) { this.customerEmail.set(String((ev as any)?.detail?.value ?? '')); }
-  onNoteInput(ev: CustomEvent)  { this.note.set(String((ev as any)?.detail?.value ?? '')); }
+  // catalogo + carrello
+  readonly menu = signal<MenuItem[]>([]);
+  readonly cart = signal<CartItem[]>(loadCart());
 
-  // ===== Menu (reale + fallback mock) =======================================
-  categories = signal<MenuCategory[]>([]);
-  itemsAll   = signal<MenuItem[]>([]);
-  selectedCat = signal<number | 'all'>('all');
+  // totale calcolato
+  readonly total = computed(() =>
+    this.cart().reduce((acc, r) => acc + r.price * r.qty, 0)
+  );
 
-  itemsFiltered = computed(() => {
-    const cat = this.selectedCat();
-    const i = this.itemsAll();
-    return cat === 'all' ? i : i.filter(x => (x.cat_id ?? null) === cat);
-  });
-
-  // Mock locale se il BE non espone /orders/menu
-  private mockCats: MenuCategory[] = [
-    { id: 10, name: 'Pizze' },
-    { id: 20, name: 'Bibite' },
-  ];
-  private mockItems: MenuItem[] = [
-    { id: 101, cat_id: 10, name: 'Margherita', price: 6.50 },
-    { id: 102, cat_id: 10, name: 'Diavola',    price: 7.50 },
-    { id: 103, cat_id: 10, name: '4 Formaggi', price: 8.00 },
-    { id: 201, cat_id: 20, name: 'Acqua',      price: 1.50 },
-    { id: 202, cat_id: 20, name: 'Bibita',     price: 2.50 },
-  ];
-
-  // ===== Carrello ============================================================
-  cart = signal<{ id: number; name: string; price: number; qty: number }[]>([]);
-  total = computed(() => this.cart().reduce((s, r) => s + r.qty * r.price, 0));
-
-  addItem(m: MenuItem) {
-    const copy = [...this.cart()];
-    const idx = copy.findIndex(c => c.id === m.id);
-    if (idx >= 0) copy[idx] = { ...copy[idx], qty: copy[idx].qty + 1 };
-    else copy.push({ id: m.id, name: m.name, price: m.price, qty: 1 });
-    this.cart.set(copy);
-  }
-
-  // ✅ helper per il bottone “+” nel carrello (evita cast in template)
-  incItem(id: number, name: string, price: number) {
-    const copy = [...this.cart()];
-    const idx = copy.findIndex(c => c.id === id);
-    if (idx >= 0) copy[idx] = { ...copy[idx], qty: copy[idx].qty + 1 };
-    else copy.push({ id, name, price, qty: 1 });
-    this.cart.set(copy);
-  }
-
-  decItem(id: number) {
-    const copy = [...this.cart()];
-    const idx = copy.findIndex(c => c.id === id);
-    if (idx < 0) return;
-    const q = copy[idx].qty - 1;
-    if (q <= 0) copy.splice(idx, 1);
-    else copy[idx] = { ...copy[idx], qty: q };
-    this.cart.set(copy);
-  }
-
-  // ===== Abilitazioni ========================================================
-  canNextFrom1 = computed(() => this.customerName().trim().length > 0);
-  canNextFrom2 = computed(() => this.cart().length > 0);
-
-  // ===== Lifecycle ===========================================================
-  ionViewWillEnter() {
-    // menu reale (fallback a mock se vuoto)
+  constructor() {
+    // carico menu
     this.api.getMenu().subscribe({
-      next: (res) => {
-        const cats = (res?.categories || []);
-        const items = (res?.items || []);
-        if (cats.length && items.length) {
-          this.categories.set(cats);
-          this.itemsAll.set(items);
-          this.selectedCat.set('all');
-        } else {
-          console.warn('⚠️ [OrderBuilder] menu API vuoto → uso mock');
-          this.categories.set(this.mockCats);
-          this.itemsAll.set(this.mockItems);
-          this.selectedCat.set('all');
-        }
-      },
-      error: (e) => {
-        console.warn('⚠️ [OrderBuilder] menu API KO → uso mock', e);
-        this.categories.set(this.mockCats);
-        this.itemsAll.set(this.mockItems);
-        this.selectedCat.set('all');
-      }
+      next: rows => this.menu.set(rows || []),
+      error: e => console.warn('🍕 getMenu KO', e)
     });
   }
 
-  // ===== Submit ==============================================================
-  loading = signal(false);
+  // trackBy distinti per tipi coerenti
+  trackByMenuName(_i: number, m: MenuItem) { return `${m.name}`; }
+  trackByCartName(_i: number, it: CartItem) { return `${it.name}`; }
+
+  // azioni carrello
+  addItem(m: MenuItem) {
+    const copy = [...this.cart()];
+    const idx = copy.findIndex(x => x.name === m.name);
+    if (idx >= 0) copy[idx] = { ...copy[idx], qty: copy[idx].qty + 1 };
+    else copy.push({ name: m.name, price: Number(m.price || 0), qty: 1, product_id: toNumber(m.id) });
+    this.cart.set(copy); saveCart(copy);
+  }
+  inc(it: CartItem)   { const c = this.cart().map(x => x === it ? { ...x, qty: x.qty + 1 } : x); this.cart.set(c); saveCart(c); }
+  dec(it: CartItem)   { const c = this.cart().map(x => x === it ? { ...x, qty: Math.max(1, x.qty - 1) } : x); this.cart.set(c); saveCart(c); }
+  remove(it: CartItem){ const c = this.cart().filter(x => x !== it); this.cart.set(c); saveCart(c); }
+  clearCart()         { this.cart.set([]); saveCart([]); }
+
+  canSubmit(): boolean {
+    return !!this.customerName().trim() && this.cart().length > 0 && !this.busy();
+  }
 
   async submit() {
-    if (this.loading()) return;
-    if (!this.customerName().trim() || !this.cart().length) return;
+    if (!this.canSubmit()) return;
+    const dto: CreateOrderDto = {
+      customer_name: this.customerName().trim(),
+      phone: this.customerPhone().trim() || null,
+      note: this.note().trim() || null,
+      channel: 'admin',
+      items: this.cart().map(x => ({
+        product_id: x.product_id ?? null,
+        name: x.name, qty: x.qty, price: x.price, notes: x.notes ?? null
+      }))
+    };
 
-    this.loading.set(true);
     try {
-      const dto: OrderInput = {
-        customer_name: this.customerName().trim(),
-        phone: this.customerPhone().trim() || null,
-        email: this.customerEmail().trim() || null,
-        note: this.note().trim() || null,
-        channel: 'admin',
-        items: this.cart().map(r => ({
-          product_id: r.id,
-          name: r.name,
-          qty: r.qty,
-          price: r.price
-        }))
-      };
+      this.busy.set(true);
+      console.log('📤 [Builder] POST /api/orders …', dto);
       const created = await this.api.create(dto).toPromise();
-      console.log('✅ [OrderBuilder] creato', created);
-
-      // Reset UI + redirect
-      this.cart.set([]);
-      this.customerName.set('');
-      this.customerPhone.set('');
-      this.customerEmail.set('');
-      this.note.set('');
-      this.currentStep.set(1);
-
+      console.log('✅ [Builder] creato', created);
+      this.clearCart();
+      this.customerName.set(''); this.customerPhone.set(''); this.note.set('');
       this.router.navigateByUrl('/orders');
-    } catch (e: any) {
-      console.error('💥 [OrderBuilder] create KO', e);
-      alert(e?.error?.message || e?.message || 'Errore creazione ordine');
+    } catch (e) {
+      console.error('💥 [Builder] create KO', e);
+      alert('Errore creazione ordine');
     } finally {
-      this.loading.set(false);
+      this.busy.set(false);
     }
   }
 }

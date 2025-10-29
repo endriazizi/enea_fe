@@ -1,153 +1,115 @@
 // src/app/core/orders/orders.service.ts
 //
-// OrdersApi (FE) — Tipi + chiamate HTTP + SSE
-// - Filtri server-side: status/hours/q (se il BE li supporta; altrimenti ignora)
-// - getMenu() con fallback mock se 404
-// - stream() via EventSource (SSE)
-// Stile: commenti lunghi, log con emoji, nessuna sorpresa.
+// OrdersApi (FE) — wrapper pulito per /api/orders
+// - Tipi chiari (OrderHeader, OrderStatus, CreateOrderDto, MenuItem)
+// - Metodi: list, create, updateStatus, getMenu, stream (SSE)
+// - Nessuna logica di UI; solo chiamate HTTP e utilità SSE
+//
+// NB: il BE invia mail/WhatsApp da solo: la FE NON tocca notifiche.
 
-import { Injectable, Inject } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable, catchError, map, of } from 'rxjs';
+import { Observable, map } from 'rxjs';
 import { API_URL } from '../tokens';
 
-export type OrderStatus =
-  | 'pending'
-  | 'confirmed'
-  | 'preparing'
-  | 'ready'
-  | 'completed'
-  | 'cancelled';
+export type OrderStatus = 'pending'|'confirmed'|'preparing'|'ready'|'completed'|'cancelled';
 
 export interface OrderHeader {
   id: number;
   customer_name: string;
   phone?: string | null;
   email?: string | null;
-  total: number;
+  note?: string | null;
+  channel?: 'online'|'walkin'|'phone'|'admin'|'kiosk';
   status: OrderStatus;
-  channel?: string | null;
-  created_at?: string | null;
+  total: number;
+  created_at: string; // ISO string or 'YYYY-MM-DD HH:mm:ss' UTC dal BE
+  updated_at?: string | null;
 }
 
-export interface OrderItem {
-  product_id?: number | null;
-  name: string;
-  qty: number;
-  price: number;
-  notes?: string | null;
-}
-
-export interface MenuItem {
-  id: number | string;
-  name: string;
-  price: number;
-  cat?: string | null;
-}
-
-// 👈 Nome uniforme usato ovunque
 export interface CreateOrderDto {
   customer_name: string;
   phone?: string | null;
   email?: string | null;
-  people?: number | null;
-  scheduled_at?: string | null;
   note?: string | null;
-  channel?: string | null; // es. 'admin'
-  items: OrderItem[];
+  channel?: 'online'|'walkin'|'phone'|'admin'|'kiosk';
+  items: Array<{ product_id?: number|null; name: string; qty: number; price: number; notes?: string|null }>;
+  // opzionali per futuro:
+  people?: number;
+  scheduled_at?: string|null; // 'YYYY-MM-DD HH:mm:ss' UTC
 }
 
-export interface OrdersListParams {
-  status?: OrderStatus | 'all';
-  hours?: number;
-  q?: string;
+export interface MenuItem {
+  id?: number | string | null;
+  name: string;
+  price: number;
+  category?: string | null;
 }
 
 @Injectable({ providedIn: 'root' })
 export class OrdersApi {
-  constructor(
-    private http: HttpClient,
-    @Inject(API_URL) private baseUrl: string
-  ) {}
+  private http = inject(HttpClient);
+  private base = inject(API_URL);
 
-  list(params?: OrdersListParams): Observable<OrderHeader[]> {
-    let hp = new HttpParams();
-    if (params?.status && params.status !== 'all') hp = hp.set('status', params.status);
-    if (params?.hours) hp = hp.set('hours', String(params.hours));
-    if (params?.q) hp = hp.set('q', params.q);
-
-    return this.http.get<OrderHeader[]>(`${this.baseUrl}/orders`, { params: hp }).pipe(
-      catchError((e) => {
-        console.warn('📦 [OrdersApi] list() KO → []', e);
-        return of([]);
-      })
-    );
-  }
-
-  get(id: number): Observable<OrderHeader | null> {
-    return this.http.get<OrderHeader>(`${this.baseUrl}/orders/${id}`).pipe(
-      catchError((e) => {
-        console.warn('📦 [OrdersApi] get() KO', e);
-        return of(null);
-      })
-    );
+  list(opts?: { status?: OrderStatus|'all'; hours?: number; from?: string; to?: string; q?: string }): Observable<OrderHeader[]> {
+    let p = new HttpParams();
+    if (opts?.status && opts.status !== 'all') p = p.set('status', String(opts.status));
+    if (opts?.hours !== undefined && opts.hours !== null) p = p.set('hours', String(opts.hours));
+    if (opts?.from) p = p.set('from', opts.from);
+    if (opts?.to) p = p.set('to', opts.to);
+    if (opts?.q) p = p.set('q', opts.q);
+    return this.http.get<OrderHeader[]>(`${this.base}/orders`, { params: p });
   }
 
   create(dto: CreateOrderDto): Observable<OrderHeader> {
-    return this.http.post<OrderHeader>(`${this.baseUrl}/orders`, dto).pipe(
-      map((r) => {
-        console.log('✅ [OrdersApi] create OK', r);
-        return r;
-      })
-    );
+    return this.http.post<OrderHeader>(`${this.base}/orders`, dto);
   }
 
   updateStatus(id: number, status: OrderStatus): Observable<OrderHeader> {
-    return this.http
-      .patch<OrderHeader>(`${this.baseUrl}/orders/${id}/status`, { status })
-      .pipe(map((r) => (console.log('🔁 updateStatus OK', { id, status }), r)));
+    return this.http.patch<OrderHeader>(`${this.base}/orders/${id}/status`, { status });
   }
 
+  // Mock semplice se /api/products non esiste — restituisce un set minimo
   getMenu(): Observable<MenuItem[]> {
-    return this.http.get<any[]>(`${this.baseUrl}/products`).pipe(
-      map((rows) =>
-        (rows || []).map((p) => ({
-          id: p.id ?? p.product_id ?? p.code ?? String(p.name),
-          name: p.name,
-          price: Number(p.price ?? p.list_price ?? 0),
-          cat: p.category ?? null
-        }))
-      ),
-      catchError((e) => {
-        console.warn('🍕 [OrdersApi] getMenu() 404/KO → mock', e);
-        const mock: MenuItem[] = [
+    return this.http.get<any>(`${this.base}/products`).pipe(
+      map((rows: any[]) => {
+        if (Array.isArray(rows) && rows.length) {
+          // Mappo campi basilari (id, name, price). Se il BE ha shape diverso, qui è il punto da adattare.
+          return rows
+            .filter(r => (r?.is_active ?? 1) === 1)
+            .map(r => ({
+              id: (r.id ?? null),
+              name: String(r.name ?? r.title ?? 'Prodotto'),
+              price: Number(r.price ?? r.unit_price ?? 0),
+              category: (r.category ?? r.cat ?? null)
+            })) as MenuItem[];
+        }
+        // fallback mock
+        return [
           { id: 1, name: 'Margherita', price: 6.5 },
           { id: 2, name: 'Diavola',    price: 7.5 },
-          { id: 3, name: 'Acqua 0.5L', price: 1.5 },
-        ];
-        return of(mock);
+          { id: 3, name: 'Acqua',      price: 1.5 },
+        ] as MenuItem[];
       })
     );
   }
 
-  stream(handlers: {
+  // ===== SSE: aggiornamenti in tempo reale ==================================
+  stream(cb: {
+    onOpen?: () => void;
+    onError?: (e: any) => void;
     onCreated?: (o: OrderHeader) => void;
     onStatus?: (p: { id: number; status: OrderStatus }) => void;
-    onError?: (e: any) => void;
   }): EventSource {
-    const es = new EventSource(`${this.baseUrl}/orders/stream`, { withCredentials: false });
-
-    es.addEventListener('created', (ev: MessageEvent) => {
-      try { handlers.onCreated?.(JSON.parse(ev.data)); } catch (e) { console.warn('🧵 created parse KO', e); }
+    const es = new EventSource(`${this.base}/orders/stream`);
+    es.addEventListener('open', () => cb.onOpen?.());
+    es.addEventListener('error', (e) => cb.onError?.(e));
+    es.addEventListener('created', (ev: any) => {
+      try { cb.onCreated?.(JSON.parse(ev.data)); } catch {}
     });
-
-    es.addEventListener('status', (ev: MessageEvent) => {
-      try { handlers.onStatus?.(JSON.parse(ev.data)); } catch (e) { console.warn('🧵 status parse KO', e); }
+    es.addEventListener('status', (ev: any) => {
+      try { cb.onStatus?.(JSON.parse(ev.data)); } catch {}
     });
-
-    es.onerror = (e) => handlers.onError?.(e);
     return es;
   }
 }
-
-export { OrdersApi as default };

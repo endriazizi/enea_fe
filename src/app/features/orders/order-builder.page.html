@@ -1,108 +1,101 @@
 <!-- src/app/features/orders/order-builder.page.html -->
-
 <ion-header>
   <ion-toolbar>
-    <ion-buttons slot="start">
-      <ion-back-button defaultHref="/orders"></ion-back-button>
-    </ion-buttons>
     <ion-title>Nuovo ordine</ion-title>
   </ion-toolbar>
 </ion-header>
 
 <ion-content>
-  <div style="max-width: 980px; margin: 0 auto; padding: 12px; display: grid; gap: 12px; grid-template-columns: 1fr;">
-
-    <!-- ==== Anagrafica ===================================================== -->
+  <div style="max-width: 980px; margin: 0 auto; padding: 12px">
+    <!-- DATI CLIENTE -->
     <ion-list inset="true">
       <ion-item lines="full">
-        <ion-label position="stacked">Nome cliente</ion-label>
-        <ion-input placeholder="Mario Rossi"
-          (ionInput)="customerName.set(($any($event).detail?.value ?? ''))">
+        <ion-label position="stacked">Cognome/Nome *</ion-label>
+        <ion-input
+          [value]="customerName()"
+          placeholder="Rossi Mario"
+          (ionInput)="customerName.set(($any($event).detail?.value ?? '').toString())">
         </ion-input>
       </ion-item>
 
-      <ion-item lines="full">
+      <ion-item lines="full" style="margin-top:8px">
         <ion-label position="stacked">Telefono</ion-label>
-        <ion-input type="tel" inputmode="tel" placeholder="+39 …"
-          (ionInput)="customerPhone.set(($any($event).detail?.value ?? ''))">
+        <ion-input
+          [value]="customerPhone()"
+          inputmode="tel"
+          placeholder="+39 333 123 4567"
+          (ionInput)="customerPhone.set(($any($event).detail?.value ?? '').toString())">
         </ion-input>
       </ion-item>
 
-      <ion-item lines="full">
+      <ion-item lines="full" style="margin-top:8px">
         <ion-label position="stacked">Note</ion-label>
-        <ion-textarea autoGrow="true" placeholder="Es. senza cipolla"
-          (ionInput)="note.set(($any($event).detail?.value ?? ''))">
+        <ion-textarea
+          autoGrow="true"
+          placeholder="Es. senza cipolla"
+          [value]="note()"
+          (ionInput)="note.set(($any($event).detail?.value ?? '').toString())">
         </ion-textarea>
       </ion-item>
-
-      <ion-note style="margin:6px 12px 8px; display:block; opacity:.7">
-        Compila almeno il nome e aggiungi un prodotto al carrello.
-      </ion-note>
     </ion-list>
 
-    <!-- ==== Layout 2 colonne (desktop) =================================== -->
-    <div style="display:grid; grid-template-columns: 1fr; gap:12px;"
-         [style.grid-template-columns]="'1fr 1fr'">
-
+    <!-- CATALOGO + CARRELLO -->
+    <div style="display:grid; grid-template-columns: 1fr; gap:12px; margin-top:12px"
+         class="ion-hide-md-down:lg:grid-cols-2">
       <!-- Catalogo -->
       <ion-list inset="true">
-        <ion-item lines="none">
-          <ion-label>
-            <div style="font-weight:600">Catalogo</div>
-            <div style="font-size:12px; opacity:.7">Tap per aggiungere</div>
-          </ion-label>
+        <ion-item lines="full">
+          <ion-label>Catalogo</ion-label>
           <ion-badge color="medium">{{ menu().length }}</ion-badge>
         </ion-item>
-
         <ion-item *ngFor="let r of menu(); trackBy: trackByMenuName" lines="full">
           <ion-label>
-            {{ r.name }}
-            <div style="font-size:12px; opacity:.7">€ {{ r.price | number:'1.2-2':'it-IT' }}</div>
+            <div style="display:flex; gap:8px; align-items:center">
+              <strong>{{ r.name }}</strong>
+              <span style="opacity:.7">€ {{ r.price | number:'1.2-2':'it-IT' }}</span>
+              <ion-badge *ngIf="qtyInCart(r.name)>0" color="primary">{{ qtyInCart(r.name) }}</ion-badge>
+            </div>
+            <div *ngIf="r.category" style="font-size:12px; opacity:.65">{{ r.category }}</div>
           </ion-label>
-          <ion-buttons slot="end">
-            <ion-button size="small" (click)="addItem(r)">+ aggiungi</ion-button>
-          </ion-buttons>
+          <ion-button size="small" (click)="addItem(r)">+ aggiungi</ion-button>
         </ion-item>
       </ion-list>
 
       <!-- Carrello -->
       <ion-list inset="true">
-        <ion-item lines="none">
-          <ion-label>
-            <div style="font-weight:600">Carrello</div>
-            <div style="font-size:12px; opacity:.7">Totale: € {{ total() | number:'1.2-2':'it-IT' }}</div>
-          </ion-label>
-          <ion-buttons slot="end">
-            <ion-button fill="clear" size="small" (click)="clearCart()">Svuota</ion-button>
-          </ion-buttons>
+        <ion-item lines="full">
+          <ion-label>Carrello</ion-label>
+          <ion-note slot="end" style="margin-right:8px; opacity:.7">
+            Totale: € {{ total() | number:'1.2-2':'it-IT' }}
+          </ion-note>
+          <ion-button fill="clear" size="small" (click)="clearCart()">Svuota</ion-button>
         </ion-item>
 
         <ion-item *ngFor="let it of cart(); trackBy: trackByCartName" lines="full">
           <ion-label>
-            {{ it.name }}
-            <div style="font-size:12px; opacity:.7">€ {{ it.price | number:'1.2-2':'it-IT' }}</div>
+            <div style="display:flex; gap:8px; align-items:center">
+              <strong>{{ it.name }}</strong>
+              <span style="opacity:.7">€ {{ it.price | number:'1.2-2':'it-IT' }}</span>
+            </div>
           </ion-label>
-          <ion-buttons slot="end">
+          <div style="display:flex; gap:6px; align-items:center">
             <ion-button size="small" (click)="dec(it)">-</ion-button>
-            <ion-badge color="primary">{{ it.qty }}</ion-badge>
+            <ion-note style="min-width:32px; text-align:center">{{ it.qty }}</ion-note>
             <ion-button size="small" (click)="inc(it)">+</ion-button>
             <ion-button color="danger" size="small" (click)="remove(it)">rimuovi</ion-button>
-          </ion-buttons>
+          </div>
         </ion-item>
 
         <ion-item lines="none" *ngIf="!cart().length">
-          <ion-label style="opacity:.7">Carrello vuoto</ion-label>
+          <ion-label>Carrello vuoto.</ion-label>
         </ion-item>
+
+        <div style="padding: 12px 8px">
+          <ion-button expand="block" size="large" [disabled]="!canSubmit()" (click)="submit()">
+            Conferma e crea — € {{ total() | number:'1.2-2':'it-IT' }}
+          </ion-button>
+        </div>
       </ion-list>
-
-    </div>
-
-    <!-- CTA -->
-    <div style="padding: 0 4px 16px">
-      <ion-button expand="block" size="large"
-        [disabled]="busy() || !canSubmit()" (click)="submit()">
-        {{ busy() ? 'Invio…' : 'Conferma e crea' }} — € {{ total() | number:'1.2-2':'it-IT' }}
-      </ion-button>
     </div>
   </div>
 </ion-content>

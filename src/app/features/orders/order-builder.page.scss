@@ -1,0 +1,13 @@
+/* src/app/features/orders/order-builder.page.scss */
+.menu-card { border-radius: 16px; box-shadow: 0 8px 16px rgba(0,0,0,.06); }
+.menu-card .price { font-weight: 700; margin-bottom: 8px; }
+.menu-card .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+.cart-footer {
+  position: sticky; bottom: 0; z-index: 5;
+  display: flex; gap: 12px; align-items: center; justify-content: space-between;
+  padding: 10px 12px; background: var(--ion-color-light);
+  border-top: 1px solid rgba(0,0,0,.08);
+}
+.cart-footer .covers { opacity: .8; font-size: .9em; }
+.cart-footer .grand  { margin-top: 2px; }

@@ -1,15 +1,12 @@
 // src/app/core/orders/orders.service.ts
 // ============================================================================
-// OrdersApi — servizio HTTP + SSE per gli Ordini
-// - Tipi chiari ed esportati (evitiamo TS2305/TS2339 in altre pagine)
-// - Endpoints BE attuali:
-//     GET    /api/orders             (lista con filtri status/hours/from/to/q)
-//     GET    /api/orders/:id         (header + items)
-//     POST   /api/orders             (create)
-//     PATCH  /api/orders/:id/status  (update stato)
-//     SSE    /api/orders/stream      (created/status)
-// - getMenu(): legge /api/products e mappa a {id?, name, price, category?}
-// Stile: commenti lunghi, log con emoji, niente sorprese.
+// OrdersApi — HTTP + SSE per Ordini (tipi + utility di mapping prodotti)
+// - GET  /orders           (lista con filtri)
+// - GET  /orders/:id       (full: header + items)
+// - POST /orders           (create)
+// - PATCH /orders/:id/...  (stato)
+// - SSE  /orders/stream    (created/status)
+// - GET  /products         (catalogo → MenuItem[])
 // ============================================================================
 
 import { inject, Injectable } from '@angular/core';
@@ -18,23 +15,17 @@ import { map } from 'rxjs/operators';
 import { Observable } from 'rxjs';
 import { API_URL } from '../tokens';
 
-// ------------------------------- Tipi ---------------------------------------
-
 export type OrderStatus =
-  | 'pending'
-  | 'confirmed'
-  | 'preparing'
-  | 'ready'
-  | 'completed'
-  | 'cancelled';
+  | 'pending' | 'confirmed' | 'preparing' | 'ready' | 'completed' | 'cancelled';
 
 export interface OrderItem {
   id?: number;
   order_id?: number;
   name: string;
   qty: number;
-  price: number;              // € (DECIMAL(10,2) lato BE)
+  price: number;              // € (DECIMAL lato BE)
   product_id?: number | null;
+  notes?: string | null;
 }
 
 export interface OrderHeader {
@@ -44,10 +35,10 @@ export interface OrderHeader {
   email?: string | null;
   channel?: string | null;
   status: OrderStatus;
-  status_note?: string | null; // alcuni schema
-  note?: string | null;        // altri schema (fallback)
+  note?: string | null;
   created_at?: string | null;
-  total?: number;              // SUM(oi.qty*oi.price)
+  total?: number;
+  people?: number | null;
 }
 
 export interface OrderFull extends OrderHeader { items: OrderItem[]; }
@@ -56,35 +47,38 @@ export interface CreateOrderDto {
   customer_name: string;
   phone?: string | null;
   email?: string | null;
-  channel?: string | null; // es. 'admin'
-  note?: string | null;    // o status_note lato BE
+  channel?: string | null; // 'admin'
+  note?: string | null;
+  people?: number | null;
   items: Array<{
     name: string;
     qty: number;
     price: number;
     product_id?: number | null;
+    notes?: string | null;
   }>;
 }
 
 export interface MenuItem {
   id?: number;
   name: string;
-  price: number;              // € numero
+  price: number;
   category?: string | null;
+  // opzionali (se presenti nel tuo DB/JSON li useremo per “Personalizza”)
+  ingredients?: string[] | string | null;
+  extras?: Array<{ name: string; price: number }>;
 }
-
-// ------------------------------ Servizio ------------------------------------
 
 @Injectable({ providedIn: 'root' })
 export class OrdersApi {
   private http = inject(HttpClient);
-  private base = inject(API_URL); // '/api' in dev (proxy)
+  private base = inject(API_URL); // '/api' via app.config.ts
 
   list(params: {
     status?: OrderStatus | 'all';
     hours?: number;
-    from?: string; // 'YYYY-MM-DD HH:mm:ss'
-    to?: string;   // 'YYYY-MM-DD HH:mm:ss'
+    from?: string;
+    to?: string;
     q?: string;
   }): Observable<OrderHeader[]> {
     let hp = new HttpParams();
@@ -93,7 +87,7 @@ export class OrdersApi {
     if (params.from)  hp = hp.set('from', params.from);
     if (params.to)    hp = hp.set('to', params.to);
     if (params.q)     hp = hp.set('q', params.q);
-    return this.http.get<OrderHeader[]>(`${this.base}/orders`, { params: hp });
+    return this.http.get<OrderHeader>(`${this.base}/orders`, { params: hp }) as any;
   }
 
   getById(id: number): Observable<OrderFull> {
@@ -108,13 +102,12 @@ export class OrdersApi {
     return this.http.patch<OrderHeader>(`${this.base}/orders/${id}/status`, { status });
   }
 
-  // SSE — stream ordini (created/status)
+  // SSE (nativo)
   stream(): EventSource {
-    // NB: EventSource nativo per semplicità (ping su 'created' e 'status').
     return new EventSource(`${this.base}/orders/stream`);
   }
 
-  // Catalogo prodotti → MenuItem[]
+  // Catalogo → mappo differenze nomi colonne
   getMenu(): Observable<MenuItem[]> {
     return this.http.get<any[]>(`${this.base}/products`).pipe(
       map((rows) => (Array.isArray(rows) ? rows : [])),
@@ -124,8 +117,20 @@ export class OrdersApi {
           const priceStr = (r.price ?? r.prezzo ?? 0).toString();
           const price = Number.parseFloat(priceStr.replace(',', '.'));
           const category = (r.category ?? r.categoria ?? null) as string | null;
+
+          // opzionali per personalizzazione
+          const ingredients = r.ingredients ?? r.base_ingredients ?? null;
+          const extras = r.extras ?? null;
+
           const id = r.id != null ? Number(r.id) : undefined;
-          return { id, name, price: Number.isFinite(price) ? price : 0, category } as MenuItem;
+          return {
+            id,
+            name,
+            price: Number.isFinite(price) ? price : 0,
+            category,
+            ingredients,
+            extras
+          } as MenuItem;
         })
       )
     );

@@ -2,7 +2,8 @@
 // Shell contenitore dell’app.
 // ✅ Menu in OVERLAY, chiuso di default (anche su desktop).
 // ✅ Auto-close del menu ad ogni navigazione (utile su mobile).
-// ✅ Badge “in attesa” rimane identico.
+// ✅ Badge “in attesa” per prenotazioni come prima.
+// ✅ NUOVA VOCE di menu per "orders-list-live.page" (/orders-list).
 // Stile: commenti lunghi, log con emoji, Ionic standalone + Signals.
 
 import { Component, inject, signal, OnDestroy, OnInit } from '@angular/core';
@@ -15,7 +16,7 @@ import {
 import { Router, RouterLink, RouterLinkActive, RouterOutlet, NavigationEnd } from '@angular/router';
 import { MenuController } from '@ionic/angular';
 import { AuthService } from '../core/auth/auth.service';
-import { ReservationsApi } from '../core/reservations/reservations.service';
+  import { ReservationsApi } from '../core/reservations/reservations.service';
 import { filter, Subscription } from 'rxjs';
 
 // === Tipizzazione voce di menu (badge opzionale) ============================
@@ -49,13 +50,19 @@ export class ShellPage implements OnInit, OnDestroy {
   private menu   = inject(MenuController);
 
   // 🔖 Voci del menù (rotta + icona)
+  // NB: aggiunta nuova voce "/orders-list" per la pagina OrdersListLivePage
   items: MenuItem[] = [
-    { label: 'Dashboard',            path: '/diagnostics',      icon: 'home' },
-    { label: 'Lista prenotazioni',   path: '/reservations',     icon: 'list',       badge: true },
-    { label: 'Nuova prenotazione',   path: '/reservations/new', icon: 'add-circle' },
-    { label: 'Ordini (live)',        path: '/orders',           icon: 'time-outline' },
-    { label: 'Nuovo ordine',         path: '/orders/new',       icon: 'create-outline' },
-    { label: 'Prenota',              path: '/prenota',          icon: 'time-outline' },
+    { label: 'Dashboard',             path: '/diagnostics',  icon: 'home' },
+    { label: 'Lista prenotazioni',    path: '/reservations', icon: 'list',       badge: true },
+    { label: 'Nuova prenotazione',    path: '/reservations/new', icon: 'add-circle' },
+
+    // Ordini — tua pagina esistente
+    { label: 'Ordini (live)',         path: '/orders',       icon: 'time-outline' },
+    // 👇 NUOVA VOCE — nuova pagina "orders-list-live.page"
+    { label: 'Ordini (lista live)',   path: '/orders-list',  icon: 'pulse-outline' },
+
+    { label: 'Nuovo ordine',          path: '/orders/new',   icon: 'create-outline' },
+    { label: 'Prenota',               path: '/prenota',      icon: 'time-outline' },
   ];
 
   // === Badge "in attesa" =====================================================
@@ -65,6 +72,7 @@ export class ShellPage implements OnInit, OnDestroy {
 
   constructor() {
     this.refreshPendingBadge();
+    // Aggiorna badge prenotazioni ogni 60s (leggero)
     this.timer = setInterval(() => this.refreshPendingBadge(), 60_000);
     console.log('🧭 [Shell] menu items:', this.items);
   }

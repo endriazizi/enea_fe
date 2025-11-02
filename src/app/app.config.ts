@@ -1,17 +1,13 @@
 // src/app/app.config.ts
 // ============================================================================
 // Router & Providers principali dell’app
-// - Mantiene rotte esistenti (login/logout, shell admin, reservations, ecc.)
-// - ✅ Rotte pubbliche (NO auth): /prenota, /prenota/grazie
-// - ✅ NUOVE rotte Admin (con auth):
-//     • /orders/new        → “Order Builder” (porta dentro la UX PWA Customer)
-//     • /orders            → dashboard live delle ordinazioni (real-time)
-//   NB: Lazy-loaded, stile invariato.
+// - Rotte pubbliche (NO auth): /prenota, /prenota/grazie
+// - Rotte Admin (con auth):
+//     • /orders            → tua pagina esistente OrdersLivePage (rimane com’è)
+//     • /orders/new        → OrderBuilder
+//     • /orders-list       → NUOVA pagina OrdersListLivePage (lista live SSE)
 // ----------------------------------------------------------------------------
-// TODO (fuori da questo file):
-//   - Invio mail (admin + cliente) su nuovo ordine
-//   - Invio WhatsApp/Twilio/WhatsAppSender su nuovo ordine / stato ordine
-//   - Socket/SSE per aggiornamenti real-time su /orders
+// Stile: Ionic standalone + Signals, commenti lunghi, log emoji
 // ============================================================================
 
 import { ApplicationConfig, isDevMode, APP_INITIALIZER, LOCALE_ID } from '@angular/core';
@@ -40,7 +36,7 @@ const routes: Routes = [
   { path: 'login', component: LoginPage },
   { path: 'logout', loadComponent: () => import('./features/auth/logout.page').then(m => m.LogoutPage) },
 
-  // 🔧 NEW — Flusso pubblico di prenotazione: NO auth, NO Shell admin
+  // 🔧 Flusso pubblico di prenotazione: NO auth, NO Shell admin
   { path: 'prenota', loadComponent: () => import('./features/public-booking/public-booking.page').then(m => m.PublicBookingPage) },
   { path: 'prenota/grazie', loadComponent: () => import('./features/public-booking/thank-you.page').then(m => m.ThankYouPage) },
 
@@ -52,7 +48,7 @@ const routes: Routes = [
       { path: '', pathMatch: 'full', redirectTo: 'diagnostics' },
       { path: 'diagnostics', component: DiagnosticsPage },
 
-      // ==================== Prenotazioni (già esistenti) ====================
+      // Prenotazioni
       {
         path: 'reservations',
         children: [
@@ -80,10 +76,11 @@ const routes: Routes = [
         ]
       },
 
-      // ====================== 🔧 NEW — Ordini (Admin) =======================
+      // ====================== Ordini (Admin) ===========================
       {
         path: 'orders',
         children: [
+          // 👇 tua pagina ESISTENTE, non toccata
           {
             path: '',
             loadComponent: () =>
@@ -99,6 +96,15 @@ const routes: Routes = [
             canActivate: [authGuard],
           }
         ]
+      },
+
+      // 👇 NUOVO path separato per la nuova pagina "orders-list-live.page"
+      {
+        path: 'orders-list',
+        loadComponent: () =>
+          import('./features/orders/orders-list-live.page')
+            .then(m => m.OrdersListLivePage),
+        canActivate: [authGuard],
       },
 
       { path: '**', redirectTo: 'diagnostics' }

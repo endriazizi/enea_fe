@@ -1,0 +1,82 @@
+<!-- src/app/features/orders/orders-list-live.page.html -->
+<ion-header>
+  <ion-toolbar>
+    <ion-title>Ordini — Live</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="refreshList()">Aggiorna</ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content>
+  <ion-grid>
+    <ion-row>
+      <!-- COLONNA LISTA -->
+      <ion-col size="12" size-md="6">
+        <div style="display:flex; gap:8px; align-items:center; margin:8px 0;">
+          <b>Filtro:</b>
+          <ion-button size="small" [fill]="status() === 'all' ? 'solid' : 'outline'" (click)="status.set('all')">Tutti</ion-button>
+          <ion-button size="small" [fill]="status() === 'pending' ? 'solid' : 'outline'" (click)="status.set('pending')">In attesa</ion-button>
+          <ion-button size="small" [fill]="status() === 'preparing' ? 'solid' : 'outline'" (click)="status.set('preparing')">In prep</ion-button>
+          <ion-button size="small" [fill]="status() === 'ready' ? 'solid' : 'outline'" (click)="status.set('ready')">Pronti</ion-button>
+          <ion-button size="small" [fill]="status() === 'completed' ? 'solid' : 'outline'" (click)="status.set('completed')">Completati</ion-button>
+        </div>
+
+        <ion-list inset="true">
+          <ion-item *ngIf="loading()">
+            <ion-spinner name="dots" slot="start"></ion-spinner>
+            <ion-label>Caricamento…</ion-label>
+          </ion-item>
+
+          <ion-item *ngFor="let o of filtered(); trackBy: trackById" (click)="openOrder(o.id)" detail="true">
+            <ion-label>
+              <div><b>#{{ o.id }}</b> — {{ o.customer_name || 'Cliente' }}</div>
+              <div style="opacity:.7; font-size:.9em;">{{ o.created_at | date:'EEE d MMM, HH:mm' }}</div>
+            </ion-label>
+            <ion-badge [color]="statusColor(o.status)">{{ o.status }}</ion-badge>
+          </ion-item>
+
+          <ion-item *ngIf="!loading() && filtered().length === 0">
+            <ion-label>Nessun ordine</ion-label>
+          </ion-item>
+        </ion-list>
+      </ion-col>
+
+      <!-- COLONNA DETTAGLIO -->
+      <ion-col size="12" size-md="6">
+        <ion-card *ngIf="detail(); else nodetail">
+          <ion-card-header>
+            <ion-card-title>Ordine #{{ detail()!.id }}</ion-card-title>
+          </ion-card-header>
+          <ion-card-content>
+            <div style="margin-bottom:8px;">
+              <b>Cliente:</b> {{ detail()!.customer_name || '—' }}<br/>
+              <b>Telefono:</b> {{ detail()!.phone || '—' }}<br/>
+              <b>Stato:</b> <ion-badge [color]="statusColor(detail()!.status)">{{ detail()!.status }}</ion-badge><br/>
+              <b>Coperti:</b> {{ detail()!.people ?? '—' }}<br/>
+              <b>Note:</b> {{ detail()!.note || '—' }}
+            </div>
+            <ion-list>
+              <ion-item *ngFor="let it of detail()!.items">
+                <ion-label>
+                  <div><b>{{ it.name }}</b></div>
+                  <div style="opacity:.8;">{{ it.qty }} × € {{ it.price | number:'1.2-2' }}</div>
+                </ion-label>
+              </ion-item>
+            </ion-list>
+            <div style="text-align:right; margin-top:8px;">
+              <b>Totale:</b> € {{ getDetailTotal() | number:'1.2-2' }}
+            </div>
+          </ion-card-content>
+        </ion-card>
+
+        <ng-template #nodetail>
+          <ion-card>
+            <ion-card-header><ion-card-title>Dettaglio ordine</ion-card-title></ion-card-header>
+            <ion-card-content>Seleziona un ordine dalla lista a sinistra.</ion-card-content>
+          </ion-card>
+        </ng-template>
+      </ion-col>
+    </ion-row>
+  </ion-grid>
+</ion-content>

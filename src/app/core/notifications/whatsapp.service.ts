@@ -4,6 +4,7 @@ import { HttpClient } from '@angular/common/http';
 import { API_URL } from '../tokens';
 import { Observable, map } from 'rxjs';
 import { Reservation } from '../reservations/reservations.service';
+import { OrderFull } from '../orders/orders.service';
 
 export type WhatsAppProvider = 'twilio' | 'whatsender';
 
@@ -18,6 +19,14 @@ export class WhatsAppService {
       ? `${this.baseUrl}/notifications/whatsapp/twilio`
       : `${this.baseUrl}/notifications/whatsapp/whatsender`;
     const payload = { kind: 'reservation-pending', reservation };
+    return this.http.post<{ ok: boolean }>(url, payload).pipe(map(r => ({ ok: !!r?.ok })));
+  }
+
+    sendOrderCreated(provider: WhatsAppProvider, order: OrderFull): Observable<{ ok: boolean }> {
+    const url = provider === 'twilio'
+      ? `${this.baseUrl}/notifications/whatsapp/twilio`
+      : `${this.baseUrl}/notifications/whatsapp/whatsender`;
+    const payload = { kind: 'order-created', order };
     return this.http.post<{ ok: boolean }>(url, payload).pipe(map(r => ({ ok: !!r?.ok })));
   }
 }

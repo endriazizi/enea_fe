@@ -1,41 +1,37 @@
-<!-- src/app/features/orders/orders-live.page.html -->
 <ion-header>
   <ion-toolbar>
     <ion-title>Ordini</ion-title>
-    <ion-buttons slot="end"><ion-button routerLink="/orders/new">Nuovo</ion-button></ion-buttons>
   </ion-toolbar>
 </ion-header>
 
-<ion-content class="ion-padding">
-
-  <div class="filters">
+<ion-content>
+  <div style="padding:12px;">
     <ion-segment [value]="status()" (ionChange)="status.set($any($event.detail).value); load()">
       <ion-segment-button value="all">Tutti</ion-segment-button>
       <ion-segment-button *ngFor="let s of statuses" [value]="s">{{ s | uppercase }}</ion-segment-button>
     </ion-segment>
 
-    <ion-item lines="none">
-      <ion-label>Ultime ore</ion-label>
-      <ion-input type="number" [value]="hours()" (ionInput)="hours.set(+$any($event.target).value || 6)"></ion-input>
+    <div style="display:flex; align-items:center; gap:8px; margin-top:10px;">
+      <ion-item style="flex:0 0 140px;">
+        <ion-label position="stacked">Ultime ore</ion-label>
+        <ion-input type="number" [value]="hours()" (ionInput)="hours.set(+$any($event.target).value)"></ion-input>
+      </ion-item>
       <ion-button (click)="load()">Aggiorna</ion-button>
-    </ion-item>
-  </div>
+    </div>
 
-  <ion-grid>
-    <ion-row>
+    <ion-row style="margin-top:12px;">
       <ion-col size="12" size-md="6" size-lg="4" *ngFor="let o of rows()">
         <ion-card (dblclick)="setStatus(o,'completed')">
           <ion-card-header>
             <ion-card-title>#{{ o.id }} — {{ o.status | uppercase }}</ion-card-title>
           </ion-card-header>
           <ion-card-content>
-            <div class="meta">
-              <div><b>{{ o.customer_name || '—' }}</b></div>
-              <div>{{ o.created_at | date:'HH:mm' }}</div>
-            </div>
-            <div class="note">{{ o.note }}</div>
+            <div><b>{{ o.customer_name }}</b></div>
+            <div *ngIf="o.phone">{{ o.phone }}</div>
+            <div *ngIf="o.people">Coperti: {{ o.people }}</div>
+            <div *ngIf="o.scheduled_at">Orario: {{ o.scheduled_at }}</div>
 
-            <div class="actions">
+            <div style="display:flex; gap:6px; margin-top:8px;">
               <ion-button size="small" (click)="openDetail(o)">Vedi</ion-button>
               <ion-button size="small" color="medium" (click)="setStatus(o,'confirmed')">Conferma</ion-button>
               <ion-button size="small" color="warning" (click)="setStatus(o,'preparing')">Prepara</ion-button>
@@ -46,27 +42,23 @@
         </ion-card>
       </ion-col>
     </ion-row>
-  </ion-grid>
 
-  <!-- Dettaglio -->
-  <ion-modal [isOpen]="detailOpen()">
-    <ng-template>
-      <ion-header><ion-toolbar><ion-title>Ordine #{{ detail()?.id }}</ion-title>
-        <ion-buttons slot="end"><ion-button (click)="closeDetail()">Chiudi</ion-button></ion-buttons>
-      </ion-toolbar></ion-header>
-      <ion-content class="ion-padding">
-        <ion-list *ngIf="detail() as d">
-          <ion-item *ngFor="let it of d.items">
-            <ion-label>{{ it.name }} × {{ it.qty }}</ion-label>
-            <ion-note slot="end">€ {{ (it.price * it.qty) | number:'1.2-2' }}</ion-note>
-          </ion-item>
-          <ion-item>
-            <ion-label><b>Totale</b></ion-label>
-            <ion-note slot="end"><b>€ {{ detailTotal() | number:'1.2-2' }}</b></ion-note>
-          </ion-item>
-        </ion-list>
-      </ion-content>
-    </ng-template>
-  </ion-modal>
-
+    <!-- Dettaglio -->
+    <ion-modal [isOpen]="detailOpen()">
+      <div style="padding:12px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <h2>Ordine #{{ detail?.id }}</h2>
+          <ion-button (click)="closeDetail()">Chiudi</ion-button>
+        </div>
+        <ion-item *ngFor="let it of detail?.items">
+          <ion-label>{{ it.qty }} × {{ it.name }}</ion-label>
+          <ion-note slot="end">{{ (it.price * it.qty) | number:'1.2-2' }}</ion-note>
+        </ion-item>
+        <ion-item>
+          <ion-label><b>Totale</b></ion-label>
+          <ion-note slot="end"><b>{{ detail?.total | number:'1.2-2' }}</b></ion-note>
+        </ion-item>
+      </div>
+    </ion-modal>
+  </div>
 </ion-content>

@@ -22,10 +22,11 @@ export class WhatsAppService {
     return this.http.post<{ ok: boolean }>(url, payload).pipe(map(r => ({ ok: !!r?.ok })));
   }
 
-    sendOrderCreated(provider: WhatsAppProvider, order: OrderFull): Observable<{ ok: boolean }> {
+  /** WhatsApp su ordine creato (se vuoi “messaggio empatico” post-creazione) */
+  sendOrderCreated(provider: WhatsAppProvider, order: OrderFull): Observable<{ ok: boolean }> {
     const url = provider === 'twilio'
       ? `${this.baseUrl}/notifications/whatsapp/twilio`
-      : `${this.baseUrl}/notifications/whatsapp/whatsender`;
+      : `${this.baseUrl}/notifications/whatsender`;
     const payload = { kind: 'order-created', order };
     return this.http.post<{ ok: boolean }>(url, payload).pipe(map(r => ({ ok: !!r?.ok })));
   }

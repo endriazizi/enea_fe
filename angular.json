@@ -6,7 +6,10 @@
     "admin-pwa": {
       "projectType": "application",
       "schematics": {
-        "@schematics/angular:component": { "style": "scss", "standalone": true }
+        "@schematics/angular:component": {
+          "style": "scss",
+          "standalone": true
+        }
       },
       "root": "",
       "sourceRoot": "src",
@@ -22,7 +25,14 @@
             "tsConfig": "tsconfig.app.json",
             "inlineStyleLanguage": "scss",
             "assets": [
-              { "glob": "**/*", "input": "public", "output": "/" }
+              "src/favicon.ico",
+              "src/assets",
+              "src/manifest.webmanifest",
+              {
+                "glob": "**/*",
+                "input": "src/icons",
+                "output": "/icons/"
+              }
             ],
             "styles": ["src/styles.scss"]
           },
@@ -42,7 +52,8 @@
                   "with": "src/app/environments/environment.prod.ts"
                 }
               ],
-              "serviceWorker": "ngsw-config.json"
+              "serviceWorker": true,
+              "ngswConfigPath": "ngsw-config.json"
             },
             "development": {
               "optimization": false,
@@ -54,7 +65,10 @@
         },
         "serve": {
           "builder": "@angular/build:dev-server",
-          "options": { "proxyConfig": "proxy.conf.json", "open": true },
+          "options": {
+            "proxyConfig": "proxy.conf.json",
+            "open": true"
+          },
           "configurations": {
             "production": { "buildTarget": "admin-pwa:build:production" },
             "development": { "buildTarget": "admin-pwa:build:development" }
@@ -69,7 +83,11 @@
             "tsConfig": "tsconfig.spec.json",
             "inlineStyleLanguage": "scss",
             "assets": [
-              { "glob": "**/*", "input": "public", "output": "/" }
+              {
+                "glob": "**/*",
+                "input": "public",
+                "output": "/"
+              }
             ],
             "styles": ["src/styles.scss"]
           }

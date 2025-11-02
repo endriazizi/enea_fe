@@ -3,7 +3,7 @@
 <!-- Header superiore -->
 <ion-header>
   <ion-toolbar>
-    <!-- 🔧 In desktop vogliamo vedere SEMPRE l’hamburger -->
+    <!-- 🍔 Hamburger sempre visibile -->
     <ion-buttons slot="start">
       <ion-menu-button [autoHide]="false"></ion-menu-button>
     </ion-buttons>
@@ -16,41 +16,31 @@
   </ion-toolbar>
 </ion-header>
 
-<!-- Layout a due colonne: menu a sinistra, contenuti a destra -->
-<!-- when="(min-width: 992px)" => da 992px in su il menu resta sempre visibile -->
-<ion-split-pane when="(min-width: 992px)" contentId="main-content">
-  <!-- SIDEMENU -->
-  <ion-menu contentId="main-content" type="overlay">
-    <ion-header>
-      <ion-toolbar>
-        <ion-title>Menu</ion-title>
-      </ion-toolbar>
-    </ion-header>
+<!-- ✅ Menu OVERLAY: CHIUSO di default, apribile con hamburger o swipe -->
+<ion-menu contentId="main-content" type="overlay" swipeGesture="true">
+  <ion-header>
+    <ion-toolbar>
+      <ion-title>Menu</ion-title>
+    </ion-toolbar>
+  </ion-header>
 
-    <ion-content>
-      <ion-list>
-        <!-- 🧠 TRUCCO: [autoHide]="false"
-             Se lasci auto-hide="true", in split-pane (desktop) gli item si nascondono! -->
-        <ion-menu-toggle [autoHide]="false" *ngFor="let item of items">
-          <ion-item button [routerLink]="item.path" routerLinkActive="ion-activated">
-            <!-- Le icone appaiono se sono state registrate (vedi icons.ts) -->
-            <ion-icon slot="start" *ngIf="item.icon" [name]="item.icon"></ion-icon>
-            <ion-label>{{ item.label }}</ion-label>
+  <ion-content>
+    <ion-list>
+      <!-- [autoHide]="false" per mantenere evidenziata la voce attiva -->
+      <ion-menu-toggle [autoHide]="false" *ngFor="let item of items">
+        <ion-item button [routerLink]="item.path" routerLinkActive="ion-activated">
+          <ion-icon slot="start" *ngIf="item.icon" [name]="item.icon"></ion-icon>
+          <ion-label>{{ item.label }}</ion-label>
 
-            <!-- === INIZIO MODIFICA (badge "In attesa") === -->
-            <!-- ✅ Se la voce è la lista prenotazioni e abbiamo un numero valido, mostro il badge -->
-            <ion-badge *ngIf="item.badge && pendingToday() >= 0" slot="end" color="warning">
-              {{ pendingToday() }}
-            </ion-badge>
-            <!-- === FINE MODIFICA === -->
-          </ion-item>
-        </ion-menu-toggle>
-      </ion-list>
-    </ion-content>
-  </ion-menu>
-
-  <!-- AREA CONTENUTI (deve avere lo stesso id di contentId sopra) -->
-  <ion-content id="main-content">
-    <ion-router-outlet></ion-router-outlet>
+          <!-- Badge "in attesa" per la lista prenotazioni -->
+          <ion-badge *ngIf="item.badge && pendingToday() >= 0" slot="end" color="warning">
+            {{ pendingToday() }}
+          </ion-badge>
+        </ion-item>
+      </ion-menu-toggle>
+    </ion-list>
   </ion-content>
-</ion-split-pane>
+</ion-menu>
+
+<!-- Area contenuti (target del menu overlay) -->
+<ion-router-outlet id="main-content"></ion-router-outlet>

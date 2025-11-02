@@ -1,72 +1,115 @@
-<!-- src/app/features/orders/orders-live.page.html -->
 <ion-header>
   <ion-toolbar>
-    <ion-buttons slot="start">
-      <ion-back-button defaultHref="/orders"></ion-back-button>
+    <ion-title>Ordini (Live)</ion-title>
+    <ion-buttons slot="end">
+      <ion-button routerLink="/orders/new" routerDirection="forward">Nuovo</ion-button>
     </ion-buttons>
-    <ion-title>Ordini — Live</ion-title>
   </ion-toolbar>
 </ion-header>
 
 <ion-content>
-  <div style="max-width: 980px; margin: 0 auto; padding: 12px">
 
-    <!-- FILTRI -->
-    <ion-item lines="full">
-      <ion-label>Stato</ion-label>
-      <ion-segment [value]="status()" (ionChange)="onStatusTab($any($event).detail?.value)">
-        <ion-segment-button value="all"><ion-label>Tutti</ion-label></ion-segment-button>
-        <ion-segment-button value="pending"><ion-label>Pending</ion-label></ion-segment-button>
-        <ion-segment-button value="confirmed"><ion-label>Confirmed</ion-label></ion-segment-button>
-        <ion-segment-button value="preparing"><ion-label>Preparing</ion-label></ion-segment-button>
-        <ion-segment-button value="ready"><ion-label>Ready</ion-label></ion-segment-button>
-        <ion-segment-button value="completed"><ion-label>Done</ion-label></ion-segment-button>
-        <ion-segment-button value="cancelled"><ion-label>Cancelled</ion-label></ion-segment-button>
-      </ion-segment>
-    </ion-item>
+  <!-- Filtri rapidi ------------------------------------------------------- -->
+  <div style="padding:12px; display:grid; gap:10px;">
+    <ion-segment [value]="status()" (ionChange)="onStatusTab($any($event.detail).value || 'all')">
+      <ion-segment-button value="all">Tutti</ion-segment-button>
+      <ion-segment-button value="pending">Pending</ion-segment-button>
+      <ion-segment-button value="confirmed">Confirm</ion-segment-button>
+      <ion-segment-button value="preparing">Prep</ion-segment-button>
+      <ion-segment-button value="ready">Ready</ion-segment-button>
+      <ion-segment-button value="completed">Done</ion-segment-button>
+      <ion-segment-button value="cancelled">Cancel</ion-segment-button>
+    </ion-segment>
 
-    <ion-item lines="full">
-      <ion-label>Ore (live)</ion-label>
-      <ion-input type="number" [value]="hours()" min="1" max="72"
-        (ionInput)="onHoursChange($any($event).detail?.value)"></ion-input>
-      <ion-label slot="end">Ricerca</ion-label>
-      <ion-input placeholder="Cognome/telefono" [value]="q()"
-        (ionInput)="onSearchChange($any($event).detail?.value)"></ion-input>
-    </ion-item>
+    <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+      <ion-searchbar placeholder="Cerca (nome, canale, note, #id)" (ionInput)="onQueryInput($event)" style="flex:1 1 300px"></ion-searchbar>
+      <label style="display:flex; align-items:center; gap:6px;">
+        <span>Ore</span>
+        <input type="number" min="1" [value]="hours()" (input)="onHoursInput($event)" style="width:80px; padding:6px 8px; border-radius:6px; border:1px solid #ddd;">
+      </label>
+      <div style="display:flex; align-items:center; gap:6px;">
+        <input type="datetime-local" [value]="fromDT() || ''" (input)="onFromInput($event)">
+        <input type="datetime-local" [value]="toDT()   || ''" (input)="onToInput($event)">
+        <ion-button fill="outline" (click)="clearRange()">Reset range</ion-button>
+      </div>
+      <ion-toggle [checked]="view()==='kanban'" (ionChange)="onViewChange($any($event.detail).checked ? 'kanban' : 'list')">Kanban</ion-toggle>
+      <ion-toggle (ionChange)="toggleCompact($event)">Compatta</ion-toggle>
+      <ion-toggle [checked]="sound.enabled()" (ionChange)="toggleSound($event)">Suono</ion-toggle>
+    </div>
+  </div>
 
-    <ion-note style="margin:6px 12px 8px; display:block; opacity:.7">
-      Default 6 ore = “live”. Cambia i filtri per restringere.
-    </ion-note>
-
-    <!-- LISTA -->
-    <ion-item *ngFor="let o of rows(); trackBy: trackById" lines="full">
+  <!-- LISTA --------------------------------------------------------------- -->
+  <ion-list *ngIf="view()==='list'">
+    <ion-item *ngFor="let o of filtered(); trackBy: trackById" (click)="openDetail(o)" (dblclick)="onCardTap(o)">
       <ion-label>
-        <div style="display:flex; gap:8px; align-items:center">
-          <strong>#{{ o.id }}</strong>
-          <span>{{ o.customer_name }}</span>
+        <div style="display:flex;justify-content:space-between;gap:10px;">
+          <div><b>#{{ o.id }}</b> — {{ o.customer_name || '—' }}</div>
           <ion-badge [color]="statusColor(o.status)">{{ o.status }}</ion-badge>
-          <span style="margin-left:auto; font-weight:600">€ {{ o.total | number:'1.2-2':'it-IT' }}</span>
         </div>
-        <div style="font-size:12px; opacity:.75">
-          {{ o.created_at }}
-          <span *ngIf="o.note">— {{ o.note }}</span>
+        <div style="opacity:.8">{{ o.created_at || '' }}</div>
+        <div *ngIf="noteOf(o)">{{ noteOf(o) }}</div>
+
+        <!-- 🔧 Azioni veloci cambio stato (non cambia la struttura, solo una riga di bottoni) -->
+        <div style="display:flex; gap:6px; margin-top:8px; flex-wrap:wrap;">
+          <ion-button size="small" fill="outline" (click)="setStatus(o,'confirmed')"  [disabled]="busyId()===o.id"><ion-icon name="checkmark-outline"></ion-icon>&nbsp;Confirm</ion-button>
+          <ion-button size="small" fill="outline" (click)="setStatus(o,'preparing')"  [disabled]="busyId()===o.id"><ion-icon name="restaurant-outline"></ion-icon>&nbsp;Prep</ion-button>
+          <ion-button size="small" fill="outline" (click)="setStatus(o,'ready')"      [disabled]="busyId()===o.id"><ion-icon name="cube-outline"></ion-icon>&nbsp;Ready</ion-button>
+          <ion-button size="small" fill="solid"  color="success" (click)="setStatus(o,'completed')" [disabled]="busyId()===o.id"><ion-icon name="checkmark-done-outline"></ion-icon>&nbsp;Done</ion-button>
+          <ion-button size="small" fill="solid"  color="danger"  (click)="setStatus(o,'cancelled')" [disabled]="busyId()===o.id"><ion-icon name="close-outline"></ion-icon>&nbsp;Cancel</ion-button>
         </div>
       </ion-label>
+    </ion-item>
+  </ion-list>
 
-      <!-- Azioni stato rapide -->
-      <div style="display:flex; gap:6px; align-items:center; margin-left:12px; flex-wrap:wrap">
-        <ng-container *ngFor="let ns of nextStates(o.status)">
-          <ion-button size="small"
-            [disabled]="busyId()===o.id"
-            (click)="patchStatus(o, ns)">
-            {{ ns }}
-          </ion-button>
-        </ng-container>
+  <!-- KANBAN --------------------------------------------------------------- -->
+  <div *ngIf="view()==='kanban'" style="display:grid; grid-template-columns: repeat(6, 1fr); gap:12px; padding:12px;" class="ion-hide-sm-down">
+    <div *ngFor="let s of statuses">
+      <h4 style="margin:4px 0 8px;">{{ s | uppercase }}</h4>
+
+      <div *ngFor="let o of kanbanColumns().get(s) || []; trackBy: trackById"
+           (dblclick)="onCardTap(o)"
+           style="border:1px solid #eee;border-radius:10px;padding:10px;margin-bottom:10px; cursor:default;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <b>#{{ o.id }}</b>
+          <ion-badge [color]="statusColor(o.status)">{{ o.status }}</ion-badge>
+        </div>
+        <div (click)="openDetail(o)" style="cursor:pointer;">{{ o.customer_name || '—' }}</div>
+        <div *ngIf="noteOf(o)" style="opacity:.85">{{ noteOf(o) }}</div>
+
+        <!-- 🔧 Azioni veloci cambio stato -->
+        <div style="display:flex; gap:6px; margin-top:8px; flex-wrap:wrap;">
+          <ion-button size="small" fill="outline" (click)="setStatus(o,'confirmed')"  [disabled]="busyId()===o.id"><ion-icon name="checkmark-outline"></ion-icon></ion-button>
+          <ion-button size="small" fill="outline" (click)="setStatus(o,'preparing')"  [disabled]="busyId()===o.id"><ion-icon name="restaurant-outline"></ion-icon></ion-button>
+          <ion-button size="small" fill="outline" (click)="setStatus(o,'ready')"      [disabled]="busyId()===o.id"><ion-icon name="cube-outline"></ion-icon></ion-button>
+          <ion-button size="small" fill="solid"  color="success" (click)="setStatus(o,'completed')" [disabled]="busyId()===o.id"><ion-icon name="checkmark-done-outline"></ion-icon></ion-button>
+          <ion-button size="small" fill="solid"  color="danger"  (click)="setStatus(o,'cancelled')" [disabled]="busyId()===o.id"><ion-icon name="close-outline"></ion-icon></ion-button>
+        </div>
       </div>
-    </ion-item>
-
-    <ion-item lines="none" *ngIf="!rows().length">
-      <ion-label>Nessun ordine nel periodo selezionato.</ion-label>
-    </ion-item>
+    </div>
   </div>
+
+  <!-- Modal dettaglio ------------------------------------------------------ -->
+  <ion-modal [isOpen]="detailOpen()">
+    <ng-template>
+      <ion-header>
+        <ion-toolbar>
+          <ion-title>Ordine #{{ detail()?.id }}</ion-title>
+          <ion-buttons slot="end"><ion-button (click)="closeDetail()">Chiudi</ion-button></ion-buttons>
+        </ion-toolbar>
+      </ion-header>
+      <ion-content>
+        <div style="padding:12px" *ngIf="detail() as d">
+          <p><b>Cliente:</b> {{ d.customer_name || '—' }}</p>
+          <p><b>Stato:</b> <ion-badge [color]="statusColor(d.status)">{{ d.status }}</ion-badge></p>
+          <ion-list inset="true">
+            <ion-item *ngFor="let it of d.items; trackBy: trackByItem">
+              <ion-label>{{ it.name }} × {{ it.qty }}</ion-label>
+              <ion-note slot="end">€ {{ it.price | number:'1.2-2' }}</ion-note>
+            </ion-item>
+          </ion-list>
+        </div>
+      </ion-content>
+    </ng-template>
+  </ion-modal>
+
 </ion-content>

@@ -1,11 +1,10 @@
-/* === Stili originali tuoi (invariati) ===================================== */
+/* === Stili originali (immutati) =========================================== */
 .menu-card { border-radius: 16px; box-shadow: 0 8px 16px rgba(0,0,0,.06); }
 .menu-card .price { font-weight: 700; margin-bottom: 8px; }
 .menu-card .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
 .cart-footer {
-  /* Altezza dichiarata: la usiamo anche per posizionare il riepilogo */
-  --footer-h: 72px;
+  --footer-h: 72px; /* usata anche per il riepilogo sticky */
   position: sticky; bottom: 0; z-index: 5;
   display: flex; gap: 12px; align-items: center; justify-content: space-between;
   padding: 10px 12px; background: var(--ion-color-light);
@@ -14,10 +13,9 @@
 .cart-footer .covers { opacity: .8; font-size: .9em; }
 .cart-footer .grand  { margin-top: 2px; }
 
-/* === INIZIO MODIFICA: riepilogo cartello sticky sopra al footer =========== */
+/* === RIEPILOGO CARRELLO sticky (sopra al footer) ========================== */
 .cart-summary {
   position: sticky;
-  /* si “aggancia” appena sopra al footer: 8px di respiro */
   bottom: calc(var(--footer-h, 72px) + 8px);
   z-index: 4;
   margin: 8px 12px;
@@ -25,18 +23,13 @@
   background: var(--ion-background-color);
   box-shadow: 0 6px 14px rgba(0,0,0,.06);
 }
-
-.cart-summary .cs-header {
-  display:flex; justify-content:space-between; align-items:center;
-}
+.cart-summary .cs-header { display:flex; justify-content:space-between; align-items:center; }
 .cart-summary .title { font-weight: 600; }
-
-.cart-summary .line-top {
-  display:flex; justify-content:space-between; align-items:center;
-}
+.cart-summary .line-top { display:flex; justify-content:space-between; align-items:center; }
 .cart-summary .line-sub { margin-top: 2px; opacity:.9; }
 .cart-summary .line-notes { margin-top: 4px; opacity:.8; }
-
-/* piccolo cuscinetto fra riepilogo e footer */
 .cart-spacer { height: 8px; }
-/* === FINE MODIFICA ======================================================== */
+
+/* === Piccoli ritocchi modale ============================================== */
+.sec-title { font-weight: 600; margin-bottom: 6px; }
+.chips-wrap { display:flex; gap:8px; flex-wrap:wrap; }

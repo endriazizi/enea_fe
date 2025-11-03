@@ -4,14 +4,10 @@
 // - Aggiunge "Coperto" come riga d'ordine (totale coerente con BE)
 // - Dopo il POST → chiama /orders/:id/print (2 copie Pizzeria/Cucina)
 //
-// STEP 1 ✅: badge “custom” se la riga ha notes
-// STEP 2 ✅: preset salvabili/riutilizzabili (retro-compat con preset “vecchi”)
-// STEP 3 ✅: quantità sugli EXTRA (+/− su chip) + SENZA base
-// STEP 4 ✅: somma opzionale EXTRA nel totale/payload (toggle)
-//
-// 🔶 RIEPILOGO CARRELLO completo, prezzi base/extra per riga, +/−/cestino
-// 🔶 Badge ALLERGENI sulle chip (usa x.allergen)
-// 🔶 NIENTE arrow function in template: tutti i calcoli qui in computed.
+// ✅ Riepilogo carrello sticky (sempre visibile sopra al footer)
+// ✅ Personalizza prodotto (base SENZA, extra +/−, badge allergeni)
+// ✅ Preset strutturati (retro-compat) + toggle “Somma EXTRA nel totale”
+// ✅ UI leggera, commenti lunghi, Signals. Nessuna espressione pesante in template.
 // ============================================================================
 
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
@@ -34,15 +30,14 @@ import { AuthService } from '../../core/auth/auth.service';
 interface CatalogItem { id?: number | null; name: string; price: number; category?: string | null; }
 interface CartItem {
   name: string;
-  price: number;
+  price: number;        // base (per pezzo)
   qty: number;
   product_id?: number | null;
   notes?: string | null;
-  extra_total?: number;
+  extra_total?: number; // extra (per pezzo)
 }
 interface OrderItemInput {
-  name: string; qty: number; price: number;
-  product_id?: number | null; notes?: string | null;
+  name: string; qty: number; price: number; product_id?: number | null; notes?: string | null;
 }
 interface OrderInputPayload {
   customer_name: string; phone: string | null; note: string | null; people: number | null; channel: string;
@@ -61,7 +56,9 @@ const COVER_PRICE_EUR = 1.50;
   templateUrl: './order-builder.page.html',
   styleUrls: ['./order-builder.page.scss'],
   imports: [
+    // Angular
     NgIf, NgFor, DecimalPipe, DatePipe, SlicePipe,
+    // Ionic
     IonHeader, IonToolbar, IonTitle, IonButtons, IonButton,
     IonContent, IonItem, IonLabel, IonInput, IonTextarea, IonList,
     IonBadge, IonNote, IonSegment, IonSegmentButton,
@@ -70,19 +67,26 @@ const COVER_PRICE_EUR = 1.50;
   ]
 })
 export class OrderBuilderPage implements OnInit {
-  private api = inject(OrdersApi);
-  private res = inject(ReservationsApi);
-  private wa  = inject(WhatsAppService);
-  private auth = inject(AuthService);
+  // services
+  private api    = inject(OrdersApi);
+  private res    = inject(ReservationsApi);
+  private wa     = inject(WhatsAppService);
+  private auth   = inject(AuthService);
   private router = inject(Router);
 
+  // costanti
   readonly COVER_PRICE = COVER_PRICE_EUR;
 
-  customerName = signal<string>(''); customerPhone = signal<string>(''); note = signal<string>('');
+  // anagrafica
+  customerName  = signal<string>('');  customerPhone = signal<string>('');  note = signal<string>('');
 
+  // coperti
   private readonly LS_COVERS = 'order.covers';
   covers = signal<number>(0);
+  incCovers(){ const n=(this.covers()||0)+1; this.covers.set(n); localStorage.setItem(this.LS_COVERS,String(n)); }
+  decCovers(){ const n=Math.max(0,(this.covers()||0)-1); this.covers.set(n); localStorage.setItem(this.LS_COVERS,String(n)); }
 
+  // catalogo & categorie
   private menuSig = signal<CatalogItem[]>([]);
   categories = computed<string[]>(() => {
     const set = new Set<string>();
@@ -95,6 +99,7 @@ export class OrderBuilderPage implements OnInit {
     return cat === 'TUTTI' ? all : all.filter(m => (m.category ?? 'Altro') === cat);
   });
 
+  // carrello & totale
   cart = signal<CartItem[]>([]);
   itemsCount = computed(() => this.cart().reduce((s,r)=>s+r.qty,0));
   includeExtrasInTotal = signal<boolean>(false);
@@ -111,10 +116,12 @@ export class OrderBuilderPage implements OnInit {
 
   customLinesCount = computed(() => this.cart().filter(r => !!(r.notes || '').trim()).length);
 
+  // prenotazioni oggi
   pickList = signal<Reservation[]>([]);
   selectedReservation = signal<Reservation | null>(null);
   reservationMeta = signal<{ id: number; table_id?: number|null; room_id?: number|null; start_at?: string|null } | null>(null);
 
+  // personalizza & preset
   customOpen = signal<boolean>(false);
   private _targetItem: CatalogItem | null = null;
   targetItem = () => this._targetItem;
@@ -133,7 +140,6 @@ export class OrderBuilderPage implements OnInit {
       return sum + (q > 0 ? (q * px) : 0);
     }, 0)
   );
-  canCustomize(_m: CatalogItem) { return true; }
 
   private readonly LS_PRESETS = 'order.presets.v2';
   presets = signal<Preset[]>([]);
@@ -203,7 +209,9 @@ export class OrderBuilderPage implements OnInit {
   private async loadMenu() {
     try {
       const menu = await firstValueFrom(this.api.getMenu());
-      const mapped: CatalogItem[] = (menu || []).map(m => ({ id: m.id ?? null, name: m.name, price: Number(m.price || 0), category: (m.category ?? null) }));
+      const mapped: CatalogItem[] = (menu || []).map(m => ({
+        id: m.id ?? null, name: m.name, price: Number(m.price || 0), category: (m.category ?? null)
+      }));
       this.menuSig.set(mapped);
       console.log('📥 [OrderBuilder] menu items:', mapped.length);
     } catch (e) {
@@ -212,6 +220,7 @@ export class OrderBuilderPage implements OnInit {
     }
   }
 
+  // prenotazione selezionata → precompila
   onPickReservation(r: Reservation | null) {
     this.selectedReservation.set(r);
     if (!r) { this.reservationMeta.set(null); return; }
@@ -220,8 +229,7 @@ export class OrderBuilderPage implements OnInit {
 
     const name = r.display_name || `${r.customer_first || ''} ${r.customer_last || ''}`.trim();
     this.customerName.set(name || '');
-    const phone = (r.phone || '').toString();
-    this.customerPhone.set(phone);
+    this.customerPhone.set((r.phone || '').toString());
     const ppl = Number(r.party_size || 0) || 0;
     this.covers.set(ppl);
     localStorage.setItem(this.LS_COVERS, String(ppl));
@@ -234,14 +242,11 @@ export class OrderBuilderPage implements OnInit {
     console.log('🔗 [OrderBuilder] prenotazione selezionata', { id: r.id, ppl });
   }
 
+  // UI carrello
   trackByMenuId = (_: number, m: CatalogItem) => m.id ?? m.name;
+  qtyInCart(baseName: string) { return this.cart().filter(r => r.name===baseName && !r.notes).reduce((s, r) => s + r.qty, 0); }
+  hasCustomFor(baseName: string) { return this.cart().some(r => r.name===baseName && !!(r.notes||'').trim()); }
 
-  qtyInCart(baseName: string) {
-    return this.cart().filter(r => r.name === baseName).reduce((s, r) => s + r.qty, 0);
-  }
-  hasCustomFor(baseName: string) {
-    return this.cart().some(r => r.name === baseName && !!(r.notes || '').trim());
-  }
   incCartByBaseName(baseName: string, m?: CatalogItem) {
     const price = Number((m as any)?.price ?? this.cart().find(r=>r.name===baseName)?.price ?? 0);
     const next = [...this.cart()];
@@ -254,8 +259,7 @@ export class OrderBuilderPage implements OnInit {
     const next=[...this.cart()];
     const idx=next.findIndex(r=>r.name===baseName && !r.notes);
     if (idx>=0) {
-      const cur={...next[idx]};
-      cur.qty=Math.max(0,cur.qty-1);
+      const cur={...next[idx]}; cur.qty=Math.max(0,cur.qty-1);
       if(cur.qty===0) next.splice(idx,1); else next[idx]=cur;
       this.cart.set(next);
     }
@@ -286,6 +290,7 @@ export class OrderBuilderPage implements OnInit {
   }
   clearCart(){ this.cart.set([]); }
 
+  // storage preset
   private loadPresets(): Preset[] {
     try {
       const raw2 = localStorage.getItem(this.LS_PRESETS);
@@ -302,6 +307,9 @@ export class OrderBuilderPage implements OnInit {
     try { localStorage.setItem(this.LS_PRESETS, JSON.stringify(this.presets())); }
     catch (e) { console.warn('💾❌ [OrderBuilder] persistPresets KO', e); }
   }
+
+  // personalizza
+  canCustomize(_m: CatalogItem) { return true; }
 
   async openCustomize(m: CatalogItem) {
     this._targetItem = m;
@@ -328,6 +336,7 @@ export class OrderBuilderPage implements OnInit {
     }
   }
 
+  // Base: SENZA
   isBaseRemoved(id: number) { return !!this.baseRemoved()[id]; }
   toggleBase(id: number) {
     const next = { ...this.baseRemoved() };
@@ -335,10 +344,12 @@ export class OrderBuilderPage implements OnInit {
     this.baseRemoved.set(next);
   }
 
+  // Extra: qty
   getExtraQty(id: number) { return this.extraQty()[id] || 0; }
   incExtra(id: number) { const next={...this.extraQty()}; next[id]=(next[id]||0)+1; this.extraQty.set(next); }
   decExtra(id: number) { const next={...this.extraQty()}; next[id]=Math.max(0,(next[id]||0)-1); if(next[id]===0) delete next[id]; this.extraQty.set(next); }
 
+  // Note + totale extra per unità
   private buildNotesFromSelections(): string {
     const all = this.ing();
     const removed = all.filter(x => x.is_default === 1 && this.isBaseRemoved(x.ingredient_id)).map(x => x.name);
@@ -354,7 +365,6 @@ export class OrderBuilderPage implements OnInit {
 
     return parts.join(' — ');
   }
-
   private computeExtraTotalPerUnit(): number {
     return (this.ing() || []).reduce((sum, x) => {
       const q = this.getExtraQty(x.ingredient_id);
@@ -364,8 +374,7 @@ export class OrderBuilderPage implements OnInit {
   }
 
   addCustomToCartFromModal() {
-    const t = this._targetItem;
-    if (!t) return;
+    const t = this._targetItem; if (!t) return;
     const finalNotes = this.buildNotesFromSelections();
     const extraPerUnit = this.computeExtraTotalPerUnit();
 
@@ -381,13 +390,16 @@ export class OrderBuilderPage implements OnInit {
     console.log('🧾➕ [OrderBuilder] added custom line', line);
   }
 
+  // preset
   savePresetFromModal() {
     const t = this._targetItem; if (!t) return;
+
     const notes = this.buildNotesFromSelections();
     if (!notes && Object.keys(this.baseRemoved()).length === 0 && Object.keys(this.extraQty()).length === 0) {
       console.log('💾⚠️ [OrderBuilder] preset vuoto ignorato');
       return;
     }
+
     const removedIds = Object.keys(this.baseRemoved()).map(Number).filter(n => !Number.isNaN(n));
     const extraMap   = { ...this.extraQty() };
 
@@ -452,6 +464,7 @@ export class OrderBuilderPage implements OnInit {
     console.log('🗑️ [OrderBuilder] preset eliminato', p.id);
   }
 
+  // invio ordine + stampa
   async confirmOrder() {
     try {
       const includeExtras = this.includeExtrasInTotal();
@@ -491,8 +504,4 @@ export class OrderBuilderPage implements OnInit {
       console.error('💥 [OrderBuilder] create KO', e);
     }
   }
-
-  // Coperti: metodi pubblici usati dal template
-  incCovers(){ const n=(this.covers()||0)+1; this.covers.set(n); localStorage.setItem(this.LS_COVERS,String(n)); }
-  decCovers(){ const n=Math.max(0,(this.covers()||0)-1); this.covers.set(n); localStorage.setItem(this.LS_COVERS,String(n)); }
 }

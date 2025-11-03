@@ -1,4 +1,4 @@
-// src/app/core/api/orders.api.ts
+// src/app/core/orders/orders.service.ts
 // ============================================================================
 // ORDERS API client (Http + SSE) — stile Endri (commenti lunghi, emoji)
 // Espone:
@@ -9,11 +9,11 @@
 //  - stream() → EventSource (SSE /api/orders/stream)
 //  - getMenu() → MenuProduct[]  (← usato da OrderBuilderPage)
 //  - create(payload) → OrderFull (← usato da OrderBuilderPage)
+//  - getProductIngredients(productId) → ProductIngredientChip[]  ← NEW (per modale custom)
 // ----------------------------------------------------------------------------
 // NOTE
-// - Base URL arriva via InjectionToken API_URL (environment.apiBaseUrl).
-// - Tipi ben specificati per evitare 'unknown' da firstValueFrom.
-// - Path BE coerenti con il tuo server: /api/orders, /api/products.
+// - Base URL via InjectionToken API_URL (environment.apiBaseUrl).
+// - Tipi ben specificati per evitare 'unknown'.
 // ============================================================================
 
 import { inject, Injectable } from '@angular/core';
@@ -45,7 +45,7 @@ export type OrderItem = {
   qty: number;
   price: number;
   notes: string | null;
-  category?: string; // calcolata lato BE
+  category?: string;
 };
 
 export type OrderFull = OrderHeader & { items: OrderItem[] };
@@ -55,12 +55,23 @@ export type MenuProduct = {
   id: number;
   name: string;
   description: string | null;
-  price: number | string;     // alcune liste rientrano come stringhe → normalizza tu se serve
+  price: number | string;
   is_active: 0 | 1;
   sort_order: number;
   category_id: number | null;
-  category: string | null;    // comodo per raggruppare
-  icon?: string | null;       // 🍕 se presente
+  category: string | null;
+  icon?: string | null;
+};
+
+// ---------- Ingredienti "chips-ready" (API /api/product-ingredients) --------
+export type ProductIngredientChip = {
+  ingredient_id: number;
+  name: string;
+  is_default: 0 | 1;           // incluso base
+  is_extra: 0 | 1;             // flag extra (per ora 0 nel BE, ma tipo pronto)
+  price_extra: number | null;  // opzionale (per ora null)
+  allergen: 0 | 1;             // opzionale
+  sort_order: number;
 };
 
 // ---------- Payload creazione ordine ----------
@@ -77,9 +88,9 @@ export type OrderCreatePayload = {
   phone?: string | null;
   email?: string | null;
   people?: number | null;
-  scheduled_at?: string | null;  // "YYYY-MM-DD HH:mm:ss"
+  scheduled_at?: string | null;
   note?: string | null;
-  channel?: string;              // default 'admin'
+  channel?: string;
   items: OrderCreateItem[];
 };
 
@@ -88,7 +99,7 @@ export class OrdersApi {
   private http = inject(HttpClient);
   private base = inject(API_URL); // es. http://localhost:3000/api
 
-  // ---- Elenco ordini (con filtri leggeri) ----------------------------------
+  // ---- Elenco ordini --------------------------------------------------------
   list(opts: { hours?: number; from?: string; to?: string; status?: string; q?: string } = {}): Observable<OrderHeader[]> {
     const params: Record<string, string> = {};
     if (opts.hours != null) params.hours = String(opts.hours);
@@ -99,7 +110,7 @@ export class OrdersApi {
     return this.http.get<OrderHeader[]>(`${this.base}/orders`, { params });
   }
 
-  // ---- Dettaglio ordine -----------------------------------------------------
+  // ---- Dettaglio ------------------------------------------------------------
   getById(id: number): Observable<OrderFull> {
     return this.http.get<OrderFull>(`${this.base}/orders/${id}`);
   }
@@ -109,27 +120,30 @@ export class OrdersApi {
     return this.http.patch<{ ok: true }>(`${this.base}/orders/${id}/status`, { status });
   }
 
-  // ---- Stampa (best-effort) -------------------------------------------------
+  // ---- Stampa ---------------------------------------------------------------
   print(id: number): Observable<{ ok: boolean }> {
     return this.http.post<{ ok: boolean }>(`${this.base}/orders/${id}/print`, {});
   }
 
-  // ---- SSE (lista live) -----------------------------------------------------
+  // ---- SSE ------------------------------------------------------------------
   stream(): EventSource {
-    // NB: niente fetch — usiamo nativo EventSource per semplicità
     return new EventSource(`${this.base}/orders/stream`, { withCredentials: true });
   }
 
-  // ---- MENU / CATALOGO ------------------------------------------------------
-  // Il tuo BE espone /api/products → usiamo quello 1:1.
+  // ---- MENU -----------------------------------------------------------------
   getMenu(): Observable<MenuProduct[]> {
     return this.http.get<MenuProduct[]>(`${this.base}/products`);
   }
 
-  // ---- CREA ORDINE ----------------------------------------------------------
-  // Restituisce l'ordine COMPLETO (OrderFull) come dal tuo BE POST /api/orders
+  // ---- CREA -----------------------------------------------------------------
   create(payload: OrderCreatePayload): Observable<OrderFull> {
-    // Il BE calcola il totale e torna items già normalizzati
     return this.http.post<OrderFull>(`${this.base}/orders`, payload);
+  }
+
+  // ---- INGREDIENTI (per modale personalizza) -------------------------------  // NEW
+  getProductIngredients(productId: number): Observable<ProductIngredientChip[]> {
+    return this.http.get<ProductIngredientChip[]>(
+      `${this.base}/product-ingredients/by-product/${productId}`
+    );
   }
 }

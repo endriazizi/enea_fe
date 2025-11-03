@@ -1,8 +1,8 @@
 // src/app/core/orders/types.ts
 // ============================================================================
-// Tipi condivisi Ordini (FE)
-// - Header / Item / Input / Status
-// - Menu (categoria + item) per il builder
+// Tipi condivisi per Ordini (FE) — estesi per ingredienti/varianti
+// - Aggiunta: ProductIngredient per chips (+/-) nel builder
+// - Nessuna rottura sulle interfacce esistenti
 // ============================================================================
 
 export type OrderStatus =
@@ -13,53 +13,49 @@ export type OrderStatus =
   | 'completed'
   | 'cancelled';
 
+// === Carrello / Creazione ====================================================
+
 export interface OrderItemInput {
   product_id?: number | null;
   name: string;
   qty: number;
   price: number;           // € (BE DECIMAL(10,2))
-  notes?: string | null;
+  notes?: string | null;   // es. "SENZA cipolla, +olive"
 }
 
 export interface OrderHeader {
   id: number;
-  customer_name: string;
+  customer_name?: string | null;
   phone?: string | null;
   email?: string | null;
-  people?: number | null;
-  scheduled_at?: string | null; // "YYYY-MM-DD HH:mm:ss"
-  note?: string | null;
-  channel?: 'online' | 'walkin' | 'phone' | 'admin' | 'kiosk';
+  channel?: string | null;
   status: OrderStatus;
-  total: number;
-  created_at?: string;
-  updated_at?: string | null;
+  status_note?: string | null;
+  note?: string | null;
+  created_at?: string | null;
+  total?: number | null;
 }
 
-export interface Order extends OrderHeader {
+export interface Order {
+  id: number;
   items: Array<{
     id: number;
-    order_id: number;
-    product_id?: number | null;
     name: string;
     qty: number;
     price: number;
     notes?: string | null;
   }>;
+  total?: number | null;
 }
 
 export interface OrderInput {
-  customer_name: string;
+  customer_name?: string | null;
   phone?: string | null;
-  email?: string | null;
-  people?: number | null;
-  scheduled_at?: string | null;
   note?: string | null;
-  channel?: 'online' | 'walkin' | 'phone' | 'admin' | 'kiosk';
   items: OrderItemInput[];
 }
 
-// ==== menu per il builder ====================================================
+// === Menu (catalogo) =========================================================
 
 export interface MenuCategory {
   id: number;
@@ -69,8 +65,20 @@ export interface MenuCategory {
 
 export interface MenuItem {
   id: number;
-  cat_id?: number | null;
+  category_id: number;
   name: string;
-  price: number;
-  desc?: string | null;
+  price_cents: number; // per il carrello locale (cent)
+  description?: string | null;
+  sort?: number | null;
+}
+
+// === Ingredienti per chips ===================================================
+
+export interface ProductIngredient {
+  id: number;                 // id ingrediente (o ingredient_id lato BE)
+  name: string;               // es. "mozzarella"
+  included: boolean;          // true = incluso di default; false = non incluso
+  is_extra?: 0 | 1 | boolean; // 1/true = extra opzionale
+  price_extra_cents?: number | null;
+  sort_order?: number | null;
 }

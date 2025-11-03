@@ -4,31 +4,36 @@
 // - Precompila Nome/Telefono/Coperti dalla prenotazione selezionata
 // - Aggiunge "Coperto" come riga d'ordine (totale coerente con BE)
 // - Dopo il POST → chiama /orders/:id/print (2 copie Pizzeria/Cucina)
+// - STEP 1 ✅: evidenzio le righe "custom" nel carrello (icone + notes)
+// - STEP 2 ✅: preset salvabili/riutilizzabili (note per prodotto) via localStorage
+// - STEP 3 ✅: quantità sugli EXTRA (+/− su chip) + toggle "SENZA" sugli ingredienti base
+//              (notes generate automaticamente: "SENZA: … — EXTRA: …" + note manuali)
+//              NB: per ora i prezzi extra NON alterano il totale (compatibilità).
+// NOTE: fix pipe → aggiunto SlicePipe negli imports.
 // Stile: commenti lunghi + log a emoji, Ionic standalone + Signals
 // ============================================================================
 
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
-import { NgIf, NgFor, DecimalPipe, DatePipe } from '@angular/common';
+import { NgIf, NgFor, DecimalPipe, DatePipe, SlicePipe } from '@angular/common';
 import {
   IonHeader, IonToolbar, IonTitle, IonButtons, IonButton,
   IonContent, IonItem, IonLabel, IonInput, IonTextarea, IonList,
   IonBadge, IonNote, IonSegment, IonSegmentButton,
   IonGrid, IonRow, IonCol, IonCard, IonCardHeader, IonCardTitle, IonCardContent,
-  IonFooter, IonModal, IonSelect, IonSelectOption
+  IonFooter, IonModal, IonSelect, IonSelectOption, IonIcon, IonChip
 } from '@ionic/angular/standalone';
 import { Router } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
-import { API_URL } from '../../core/tokens';
-import { OrdersApi } from '../../core/orders/orders.service';
+import { OrdersApi, ProductIngredientChip } from '../../core/orders/orders.service';
 import { ReservationsApi, Reservation } from '../../core/reservations/reservations.service';
 import { WhatsAppService } from '../../core/notifications/whatsapp.service';
 import { AuthService } from '../../core/auth/auth.service';
 
-// === tipizzazione locale (evito dipendenze incrociate) ======================
+// === tipizzazione locale =====================================================
 interface CatalogItem { id?: number | null; name: string; price: number; category?: string | null; }
-interface CartItem   { name: string; price: number; qty: number; product_id?: number | null; }
-interface OrderItemInput { name: string; qty: number; price: number; product_id?: number | null; }
+interface CartItem   { name: string; price: number; qty: number; product_id?: number | null; notes?: string | null; }
+interface OrderItemInput { name: string; qty: number; price: number; product_id?: number | null; notes?: string | null; }
 interface OrderInputPayload {
   customer_name: string;
   phone: string | null;
@@ -42,6 +47,14 @@ interface OrderInputPayload {
   scheduled_at?: string | null;
 }
 
+// Preset "leggeri": associati ad un baseName, tengono solo le note (testo).
+interface Preset {
+  id: string;
+  baseName: string;
+  notes: string;
+  created_at: number;
+}
+
 const COVER_PRICE_EUR = 1.50;
 
 @Component({
@@ -51,13 +64,13 @@ const COVER_PRICE_EUR = 1.50;
   styleUrls: ['./order-builder.page.scss'],
   imports: [
     // Angular
-    NgIf, NgFor, DecimalPipe, DatePipe,
+    NgIf, NgFor, DecimalPipe, DatePipe, SlicePipe, // 👈 aggiunto SlicePipe
     // Ionic
     IonHeader, IonToolbar, IonTitle, IonButtons, IonButton,
     IonContent, IonItem, IonLabel, IonInput, IonTextarea, IonList,
     IonBadge, IonNote, IonSegment, IonSegmentButton,
     IonGrid, IonRow, IonCol, IonCard, IonCardHeader, IonCardTitle, IonCardContent,
-    IonFooter, IonModal, IonSelect, IonSelectOption
+    IonFooter, IonModal, IonSelect, IonSelectOption, IonIcon, IonChip
   ]
 })
 export class OrderBuilderPage implements OnInit {
@@ -99,23 +112,42 @@ export class OrderBuilderPage implements OnInit {
   total = computed(() =>
     this.cart().reduce((s,r)=>s+r.price*r.qty,0) + (this.covers()>0 ? this.covers()*this.COVER_PRICE : 0)
   );
+  customLinesCount = computed(() => this.cart().filter(r => !!(r.notes || '').trim()).length);
 
   // === prenotazioni oggi =====================================================
   pickList = signal<Reservation[]>([]);
   selectedReservation = signal<Reservation | null>(null);
   reservationMeta = signal<{ id: number; table_id?: number|null; room_id?: number|null; start_at?: string|null } | null>(null);
 
-  // === personalizzazione (stub compat) ======================================
+  // === personalizzazione & PRESET ===========================================
   customOpen = signal<boolean>(false);
   private _targetItem: CatalogItem | null = null;
+  modalNote = signal<string>('');
+
+  // Ingredienti caricati per il prodotto selezionato
+  ingLoading = signal<boolean>(false);
+  ing = signal<ProductIngredientChip[]>([]);
+  // Stato UI: base rimossi e extra qty
+  baseRemoved = signal<Record<number, true>>({}); // ingredient_id -> true (SENZA)
+  extraQty    = signal<Record<number, number>>({}); // ingredient_id -> qty
+
+  // Abilito personalizzazione sempre (serve per preset/ingredienti)
+  canCustomize(_m: CatalogItem) { return true; }
   targetItem = () => this._targetItem;
-  canCustomize(_m: CatalogItem) { return false; }
-  openCustomize(m: CatalogItem) { this._targetItem = m; this.customOpen.set(true); }
+
+  // --- preset (localStorage) -------------------------------------------------
+  private readonly LS_PRESETS = 'order.presets.v1';
+  presets = signal<Preset[]>([]);
+  presetsForTarget = computed(() => {
+    const base = this._targetItem?.name || '';
+    return this.presets().filter(p => p.baseName === base).sort((a,b)=>b.created_at - a.created_at);
+  });
 
   // === lifecycle =============================================================
   async ngOnInit() {
     console.log('🧱 [OrderBuilder] init');
     this.covers.set(Number(localStorage.getItem(this.LS_COVERS) || '0') || 0);
+    this.presets.set(this.loadPresets());
     await this.loadMenu();
     await this.loadReservationsToday();
   }
@@ -193,7 +225,8 @@ export class OrderBuilderPage implements OnInit {
 
     const name = r.display_name || `${r.customer_first || ''} ${r.customer_last || ''}`.trim();
     this.customerName.set(name || '');
-    this.customerPhone.set(r.phone || '');
+    const phone = (r.phone || '').toString();
+    this.customerPhone.set(phone);
     const ppl = Number(r.party_size || 0) || 0;
     this.covers.set(ppl);
     localStorage.setItem(this.LS_COVERS, String(ppl));
@@ -212,26 +245,175 @@ export class OrderBuilderPage implements OnInit {
 
   // === UI: carrello ==========================================================
   trackByMenuId = (_: number, m: CatalogItem) => m.id ?? m.name;
-  qtyInCart(baseName: string) { return this.cart().find(r=>r.name===baseName)?.qty || 0; }
+
+  qtyInCart(baseName: string) {
+    return this.cart().filter(r => r.name === baseName).reduce((s, r) => s + r.qty, 0);
+  }
+  hasCustomFor(baseName: string) {
+    return this.cart().some(r => r.name === baseName && !!(r.notes || '').trim());
+  }
   incCartByBaseName(baseName: string, m?: CatalogItem) {
     const price = Number((m as any)?.price ?? this.cart().find(r=>r.name===baseName)?.price ?? 0);
     const next = [...this.cart()];
-    const idx = next.findIndex(r=>r.name===baseName);
+    const idx = next.findIndex(r=>r.name===baseName && !r.notes);
     if (idx>=0) next[idx] = { ...next[idx], qty: next[idx].qty + 1 };
-    else next.push({ name: baseName, price, qty: 1, product_id: (m as any)?.id ?? null });
+    else next.push({ name: baseName, price, qty: 1, product_id: (m as any)?.id ?? null, notes: null });
     this.cart.set(next);
   }
   decCartByBaseName(baseName: string) {
-    const next=[...this.cart()]; const idx=next.findIndex(r=>r.name===baseName);
-    if (idx>=0) { const cur={...next[idx]}; cur.qty=Math.max(0,cur.qty-1); if(cur.qty===0) next.splice(idx,1); else next[idx]=cur; this.cart.set(next); }
+    const next=[...this.cart()];
+    const idx=next.findIndex(r=>r.name===baseName && !r.notes);
+    if (idx>=0) {
+      const cur={...next[idx]};
+      cur.qty=Math.max(0,cur.qty-1);
+      if(cur.qty===0) next.splice(idx,1); else next[idx]=cur;
+      this.cart.set(next);
+    }
+  }
+  removeCartLine(line: CartItem) {
+    const next = this.cart().filter(r =>
+      !(r.name === line.name &&
+        r.price === line.price &&
+        (r.product_id ?? null) === (line.product_id ?? null) &&
+        (r.notes ?? null) === (line.notes ?? null))
+    );
+    this.cart.set(next);
   }
   clearCart(){ this.cart.set([]); }
+
+  // === PRESET: storage =======================================================
+  private loadPresets(): Preset[] {
+    try {
+      const raw = localStorage.getItem(this.LS_PRESETS);
+      if (!raw) return [];
+      const arr = JSON.parse(raw);
+      return Array.isArray(arr) ? arr : [];
+    } catch {
+      return [];
+    }
+  }
+  private persistPresets() {
+    try { localStorage.setItem(this.LS_PRESETS, JSON.stringify(this.presets())); }
+    catch (e) { console.warn('💾❌ [OrderBuilder] persistPresets KO', e); }
+  }
+
+  // === PERSONALIZZA: apertura + ingredienti =================================
+  async openCustomize(m: CatalogItem) {
+    this._targetItem = m;
+    this.modalNote.set('');
+    this.ing.set([]);
+    this.baseRemoved.set({});
+    this.extraQty.set({});
+    this.customOpen.set(true);
+
+    // carico ingredienti se ho un id prodotto valido
+    if (!m?.id) {
+      console.log('🧩⚠️ [Customize] prodotto senza id: ingredienti non caricati');
+      return;
+    }
+    try {
+      this.ingLoading.set(true);
+      const rows = await firstValueFrom(this.api.getProductIngredients(m.id!));
+      this.ing.set(rows || []);
+      console.log('🧩 [Customize] ingredienti caricati', { count: this.ing().length });
+    } catch (e) {
+      console.error('🧩❌ [Customize] load KO', e);
+      this.ing.set([]);
+    } finally {
+      this.ingLoading.set(false);
+    }
+  }
+
+  // === PERSONALIZZA: base SENZA =============================================
+  isBaseRemoved(id: number) { return !!this.baseRemoved()[id]; }
+  toggleBase(id: number) {
+    const next = { ...this.baseRemoved() };
+    if (next[id]) delete next[id]; else next[id] = true;
+    this.baseRemoved.set(next);
+  }
+
+  // === PERSONALIZZA: extra qty ==============================================
+  getExtraQty(id: number) { return this.extraQty()[id] || 0; }
+  incExtra(id: number) { const next={...this.extraQty()}; next[id]=(next[id]||0)+1; this.extraQty.set(next); }
+  decExtra(id: number) { const next={...this.extraQty()}; next[id]=Math.max(0,(next[id]||0)-1); if(next[id]===0) delete next[id]; this.extraQty.set(next); }
+
+  // Costruisce la stringa notes dalle selezioni + note manuali
+  private buildNotesFromSelections(): string {
+    const all = this.ing();
+    const removed = all.filter(x => x.is_default === 1 && this.isBaseRemoved(x.ingredient_id)).map(x => x.name);
+    const extras  = all.filter(x => (this.getExtraQty(x.ingredient_id) > 0))
+                       .map(x => `${x.name}${this.getExtraQty(x.ingredient_id) > 1 ? ' x'+this.getExtraQty(x.ingredient_id) : ''}`);
+
+    const parts: string[] = [];
+    if (removed.length) parts.push(`SENZA: ${removed.join(', ')}`);
+    if (extras.length)  parts.push(`EXTRA: ${extras.join(', ')}`);
+
+    const manual = (this.modalNote() || '').trim();
+    if (manual) parts.push(manual);
+
+    return parts.join(' — ');
+  }
+
+  // Aggiunge riga custom (usa selezioni + note manuali)
+  addCustomToCartFromModal() {
+    const t = this._targetItem;
+    if (!t) return;
+    const finalNotes = this.buildNotesFromSelections();
+    const line: CartItem = {
+      name: t.name,
+      price: Number(t.price || 0), // TODO: sommare extra in futuro (toggle UI).
+      qty: 1,
+      product_id: t.id ?? null,
+      notes: finalNotes || null
+    };
+    this.cart.set([ ...this.cart(), line ]);
+    console.log('🧾➕ [OrderBuilder] added custom line', line);
+  }
+
+  // Salva preset (per ora solo testo delle note)
+  savePresetFromModal() {
+    const t = this._targetItem;
+    if (!t) return;
+    const notes = this.buildNotesFromSelections();
+    if (!notes) { console.log('💾⚠️ [OrderBuilder] preset vuoto ignorato'); return; }
+    const p: Preset = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2,8)}`,
+      baseName: t.name,
+      notes,
+      created_at: Date.now()
+    };
+    this.presets.set([p, ...this.presets()]);
+    this.persistPresets();
+    console.log('💾✅ [OrderBuilder] preset salvato', p);
+  }
+
+  applyPreset(p: Preset) {
+    const t = this._targetItem;
+    if (!t) return;
+    const line: CartItem = {
+      name: t.name,
+      price: Number(t.price || 0),
+      qty: 1,
+      product_id: t.id ?? null,
+      notes: p.notes
+    };
+    this.cart.set([ ...this.cart(), line ]);
+    console.log('⚡ [OrderBuilder] preset applicato', p);
+  }
+
+  deletePreset(p: Preset) {
+    this.presets.set(this.presets().filter(x => x.id !== p.id));
+    this.persistPresets();
+    console.log('🗑️ [OrderBuilder] preset eliminato', p.id);
+  }
 
   // === invio ordine + stampa ================================================
   async confirmOrder() {
     try {
-      const items: OrderItemInput[] = this.cart().map(r => ({ name: r.name, qty: r.qty, price: r.price, product_id: r.product_id ?? null }));
-      if (this.covers() > 0) items.push({ name: 'Coperto', qty: this.covers(), price: this.COVER_PRICE, product_id: null });
+      const items: OrderItemInput[] = this.cart().map(r => ({
+        name: r.name, qty: r.qty, price: r.price, product_id: r.product_id ?? null, notes: r.notes ?? null
+      }));
+      if (this.covers() > 0) items.push({ name: 'Coperto', qty: this.covers(), price: this.COVER_PRICE, product_id: null, notes: null });
 
       const payload: OrderInputPayload = {
         customer_name: (this.customerName() || 'Cliente').trim(),
@@ -249,7 +431,6 @@ export class OrderBuilderPage implements OnInit {
       const created = await firstValueFrom(this.api.create(payload as any));
       console.log('✅ [OrderBuilder] creato', created);
 
-      // 🖨️ stampa immediata (2 copie, categorie/config da .env)
       try {
         await firstValueFrom(this.api.print(created.id));
         console.log('🖨️ [OrderBuilder] print OK');
@@ -258,6 +439,7 @@ export class OrderBuilderPage implements OnInit {
       }
 
       this.cart.set([]);
+      this.customOpen.set(false);
       this.router.navigate(['/orders']);
     } catch (e) {
       console.error('💥 [OrderBuilder] create KO', e);

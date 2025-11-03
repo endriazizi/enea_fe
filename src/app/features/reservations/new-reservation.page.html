@@ -79,10 +79,13 @@
           <div style="font-size:.8rem; font-weight:400">Oggi: {{ todayLabel() }}</div>
         </ion-label>
 
-        <!-- Quick day picker (7 giorni) -->
+        <!-- QUICK DAY PICKER come filtro (props richieste) -->
         <app-date-quick
-          [selected]="selectedDateISO()"
-          (selectedChange)="onQuickDate($event)">
+          [title]="'Giorno rapido'"
+          [showTodayLine]="false"
+          [days]="7"
+          [selected]="selectedDayForPicker()"
+          (selectedChange)="onQuickFilterDay($event)">
         </app-date-quick>
       </ion-item>
 
@@ -158,11 +161,11 @@
 
       <ion-item lines="full" style="margin-top: 8px">
         <ion-label position="stacked">Tavolo</ion-label>
+        <!-- ⛔️ niente [disabled] su controlli reattivi; TS farà enable()/disable() -->
         <ion-select
           formControlName="table_id"
           interface="popover"
-          placeholder="Seleziona tavolo"
-          [disabled]="!form.value.room_id || !tables().length">
+          placeholder="Seleziona tavolo">
           <ion-select-option *ngFor="let t of tables()" [value]="t.id">
             Tavolo {{ t.table_number || t.label || t.id }} ({{ t.capacity || '?' }})
           </ion-select-option>

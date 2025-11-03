@@ -102,6 +102,10 @@ export class NewReservationPage implements OnDestroy {
   selectedDateISO() { return this.pickedDateISO(); }
   selectedTime()    { return this.pickedTime() || ''; }
 
+  // alias richiesti per integrare il QUICK DAY PICKER "come filtro"
+  selectedDayForPicker() { return this.selectedDateISO(); }
+  onQuickFilterDay(dateISO: string) { this.onQuickDate(dateISO); }
+
   onQuickDate(dateISO: string) {
     this.pickedDateISO.set(dateISO);
     if (this.pickedTime()) this.patchStartFromPick();
@@ -124,6 +128,10 @@ export class NewReservationPage implements OnDestroy {
   }
 
   // ==== Form ====
+  /**
+   * ✅ Nessun [disabled] nei controlli reattivi in HTML.
+   *    table_id parte disabilitato e viene abilitato da TS quando carico i tavoli.
+   */
   form = this.fb.group({
     customer_last : ['' as string | null, [Validators.required]],
     customer_first: ['' as string | null, [Validators.required]],
@@ -133,7 +141,7 @@ export class NewReservationPage implements OnDestroy {
     start_at      : ['' as string | null, [Validators.required]],
     end_at        : ['' as string | null],
     room_id       : [null as number | null],
-    table_id      : [null as number | null],
+    table_id      : [{ value: null as number | null, disabled: true }], // ⬅️ parte DISABLED qui
     notes         : ['' as string | null],
   });
 
@@ -170,25 +178,47 @@ export class NewReservationPage implements OnDestroy {
   async ngOnInit() {
     try {
       const rooms = await firstValueFrom(this.api.listRooms());
+      console.log('🏨 Rooms loaded', rooms?.length ?? 0);
       this.rooms.set(rooms || []);
-      if (this.rooms().length && !this.form.value.room_id) {
-        this.form.patchValue({ room_id: this.rooms()[0].id });
+      // preselect prima sala se non impostata
+      const initialRoom = this.form.value.room_id || this.rooms()[0]?.id || null;
+      if (initialRoom) {
+        this.form.patchValue({ room_id: initialRoom });
+        await this.onRoomChange(initialRoom);
+      } else {
+        this.disableTableSelect();
       }
     } catch (e) {
-      console.warn('Rooms load KO', e);
+      console.warn('🏨 Rooms load KO', e);
+      this.disableTableSelect();
     }
   }
   ngOnDestroy() {}
 
-  async onRoomChange() {
-    const roomId = this.form.value.room_id;
+  private disableTableSelect() {
+    try { this.form.controls.table_id.disable({ emitEvent: false }); } catch {}
     this.tables.set([]);
-    if (!roomId) return;
+  }
+  private enableTableSelect() {
+    try { this.form.controls.table_id.enable({ emitEvent: false }); } catch {}
+  }
+
+  async onRoomChange(roomId?: number) {
+    const rid = (roomId ?? this.form.value.room_id) || null;
+    this.tables.set([]);
+    this.form.patchValue({ table_id: null });
+    if (!rid) { this.disableTableSelect(); return; }
+
     try {
-      const tables = await firstValueFrom(this.api.listTablesByRoom(roomId));
+      const tables = await firstValueFrom(this.api.listTablesByRoom(rid));
+      console.log('🪑 Tables for room', rid, '→', tables?.length ?? 0);
       this.tables.set(tables || []);
+      // Abilita il select solo se ho almeno 1 tavolo
+      if ((this.tables().length || 0) > 0) this.enableTableSelect();
+      else this.disableTableSelect();
     } catch (e) {
-      console.warn('Tables load KO', e);
+      console.warn('🪑 Tables load KO', e);
+      this.disableTableSelect();
     }
   }
 
@@ -199,7 +229,6 @@ export class NewReservationPage implements OnDestroy {
     if (this.form.invalid) { this.form.markAllAsTouched(); return; }
     this.loading.set(true);
     try {
-      // Normalizzo 'YYYY-MM-DDTHH:mm' per il BE (o lascia così se già accetta ISO locale)
       const startIsoLocal = this.form.value.start_at as string; // es. 2025-10-26T20:00
       const payload = {
         customer_first: this.form.value.customer_first?.trim() || null,
@@ -254,7 +283,7 @@ export class NewReservationPage implements OnDestroy {
     });
     this.pickedDateISO.set(this.todayISO());
     this.pickedTime.set(null);
-    this.tables.set([]);
+    this.disableTableSelect();
   }
 
   // ==== helpers ====

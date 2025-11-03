@@ -5,7 +5,11 @@ import {
   funnelOutline, printOutline, qrCodeOutline, addOutline, calendarOutline,
   documentTextOutline, createOutline, trashOutline, saveOutline,
   callOutline, mailOutline, peopleOutline, timeOutline, searchOutline,
-  checkmarkOutline, closeOutline
+  checkmarkOutline, closeOutline,
+  pulseOutline,
+  closeCircleOutline,
+  informationCircle,
+  informationCircleOutline
 } from 'ionicons/icons';
 
 export function registerAppIcons() {
@@ -30,5 +34,10 @@ export function registerAppIcons() {
     'search-outline': searchOutline,
     'checkmark-outline': checkmarkOutline,
     'close-outline': closeOutline,
+    'pulse-outline': pulseOutline,
+    'checkmark-circle-outline': checkmarkOutline,
+    'close-circle-outline': closeCircleOutline,
+    'information-circle-outline':informationCircleOutline,
+    'trash-bin-outline': trashOutline
   });
 }

@@ -181,8 +181,8 @@ export class ReservationsApi {
   // -------------------- Supporto UI / Lookup --------------------------------
 
   listRooms(): Observable<Room[]> {
-    // Endpoints compat: prima provo /reservations/rooms, poi /rooms
-    const primary = this.http.get<Room[]>(`${this.baseUrl}/reservations/rooms`);
+    // Endpoints compat: prima provo /rooms, poi /rooms
+    const primary = this.http.get<Room[]>(`${this.baseUrl}/rooms`);
     const fallback = () => this.http.get<Room[]>(`${this.baseUrl}/rooms`);
     return primary.pipe(catchError(() => fallback()));
   }

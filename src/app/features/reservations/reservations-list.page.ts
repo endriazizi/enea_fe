@@ -292,9 +292,13 @@ export class ReservationsListPage implements OnInit, OnDestroy {
     return val || undefined;
   }
 
+  /**
+   * Invio cambio stato verso il BE.
+   * Mantengo il tuo stile/UX + toast.
+   */
   private async sendStatus(id: number, action: 'accept'|'reject'|'cancel', reason?: string) {
     (await this.toast.create({ message: 'Invio azione…', duration: 800 })).present();
-    this.api.updateStatus(id, action, reason).subscribe({
+    this.api.updateStatus(id, { action, reason }).subscribe({
       next: async () => {
         await this.load();
         (await this.toast.create({ message: 'Stato aggiornato ✅', duration: 1500 })).present();
@@ -407,6 +411,7 @@ export class ReservationsListPage implements OnInit, OnDestroy {
       const t = new Date();
       const date = `${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,'0')}-${String(t.getDate()).padStart(2,'0')}`;
       (await this.toast.create({ message: 'Invio stampa segnaposti…', duration: 900 })).present();
+      // ✅ Allineato al service locale: firma (date: string, status?: string)
       await firstValueFrom(this.api.printPlacecards(date, 'accepted'));
       (await this.toast.create({ message: 'Segnaposti inviati ✅', duration: 1500 })).present();
     } catch (err: any) {

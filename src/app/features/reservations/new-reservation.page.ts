@@ -129,10 +129,6 @@ export class NewReservationPage implements OnDestroy {
   }
 
   // ==== Form ====
-  /**
-   * ✅ Nessun [disabled] nei controlli reattivi in HTML.
-   *    table_id parte disabilitato e viene abilitato da TS quando carico i tavoli.
-   */
   form = this.fb.group({
     customer_last : ['' as string | null, [Validators.required]],
     customer_first: ['' as string | null, [Validators.required]],
@@ -142,19 +138,18 @@ export class NewReservationPage implements OnDestroy {
     start_at      : ['' as string | null, [Validators.required]],
     end_at        : ['' as string | null],
     room_id       : [null as number | null],
-    table_id      : [{ value: null as number | null, disabled: true }], // ⬅️ parte DISABLED qui
+    table_id      : [{ value: null as number | null, disabled: true }],
     notes         : ['' as string | null],
   });
 
   get emailCtrl(): AbstractControl { return this.form.controls.email!; }
   get startCtrl(): AbstractControl { return this.form.controls.start_at!; }
 
-  // 🔠 Uppercase: NIENTE più setValue ad ogni battuta (ionInput) → su Android l'IME impazzisce.
-  //    Facciamo uppercase "vero" solo su blur/submit; uppercase VISIVO con CSS.
+  // 🔠 Uppercase "reale" solo su blur/submit (evita problemi con IME Android).
   upperOnBlur(ctrl: 'customer_last'|'customer_first') {
     const raw  = (this.form.controls[ctrl].value ?? '') as string;
     const next = raw ? raw.toLocaleUpperCase('it-IT') : raw;
-    this.form.controls[ctrl].setValue(next, { emitEvent: false }); // no eventi = niente salto cursore
+    this.form.controls[ctrl].setValue(next, { emitEvent: false });
   }
 
   incParty() { const n = (this.form.value.party_size || 1) + 1; this.form.patchValue({ party_size: n }); }
@@ -184,7 +179,6 @@ export class NewReservationPage implements OnDestroy {
       const rooms = await firstValueFrom(this.api.listRooms());
       console.log('🏨 Rooms loaded', rooms?.length ?? 0);
       this.rooms.set(rooms || []);
-      // preselect prima sala se non impostata
       const initialRoom = this.form.value.room_id || this.rooms()[0]?.id || null;
       if (initialRoom) {
         this.form.patchValue({ room_id: initialRoom });
@@ -217,7 +211,6 @@ export class NewReservationPage implements OnDestroy {
       const tables = await firstValueFrom(this.api.listTablesByRoom(rid));
       console.log('🪑 Tables for room', rid, '→', tables?.length ?? 0);
       this.tables.set(tables || []);
-      // Abilita il select solo se ho almeno 1 tavolo
       if ((this.tables().length || 0) > 0) this.enableTableSelect();
       else this.disableTableSelect();
     } catch (e) {
@@ -227,25 +220,25 @@ export class NewReservationPage implements OnDestroy {
   }
 
   // ==== Submit ====
-  onSubmit() { this.submit(); } // alias per template
+  onSubmit() { this.submit(); }
 
   async submit() {
     if (this.form.invalid) { this.form.markAllAsTouched(); return; }
 
-    // 🔠 Normalizza nome/cognome PRIMA di inviare (anche se l’utente non esce dal campo)
+    // normalizza anche se l’utente clicca subito “Crea”
     this.upperOnBlur('customer_last');
     this.upperOnBlur('customer_first');
 
     this.loading.set(true);
     try {
-      const startIsoLocal = this.form.value.start_at as string; // es. 2025-10-26T20:00
+      const startIsoLocal = this.form.value.start_at as string;
       const payload = {
         customer_first: this.form.value.customer_first?.trim() || null,
         customer_last : this.form.value.customer_last?.trim()  || null,
         phone         : this.form.value.phone?.trim()          || null,
         email         : this.form.value.email?.trim()          || null,
         party_size    : this.form.value.party_size || 1,
-        start_at      : startIsoLocal, // mantieni "locale ISO" se il BE lo gestisce
+        start_at      : startIsoLocal,
         end_at        : null,
         room_id       : this.form.value.room_id || null,
         table_id      : this.form.value.table_id || null,
@@ -255,7 +248,6 @@ export class NewReservationPage implements OnDestroy {
       const created = await firstValueFrom(this.api.create(payload));
       await (await this.toast.create({ message: 'Prenotazione creata ✅', duration: 1400 })).present();
 
-      // === Notifiche anche su PENDING ===
       if ((created as any)?.status === 'pending') {
         this.mail.sendReservationPendingAdmin(created as Reservation).subscribe(r => {
           console.log('📧 [Mail] admin pending OK?', r.ok);

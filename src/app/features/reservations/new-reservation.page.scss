@@ -1,5 +1,84 @@
-/* Uppercase solo VISIVO per gli IonInput senza toccare il valore in tempo reale */
+/* ===== Layout page & padding header-safe ===== */
+.page-resv {
+  /* assicura spazio sotto l'header su mobile */
+  --padding-top: 10px;
+}
+
+/* ===== Compatta il form in modo uniforme ===== */
+.compact ion-list[inset] {
+  margin: 6px 0; /* prima erano più distanziati */
+}
+.compact ion-item {
+  --min-height: 48px;           /* default ~56px */
+  --padding-start: 10px;
+  --inner-padding-end: 10px;
+}
+.compact ion-item[lines="none"] {
+  --min-height: 24px;
+}
+.compact ion-label[position="stacked"] {
+  margin-bottom: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ion-color-medium);
+}
+
+/* titoletti sezioni orari */
+.sec-title {
+  margin-bottom: 6px;
+  font-weight: 600;
+}
+.btn-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* spaziature utili */
+.mt-6 { margin-top: 6px; }
+.pt-2 { padding-top: 2px; }
+.pb-0 { padding-bottom: 0; }
+.px-12 { padding-left: 12px; padding-right: 12px; }
+.py-8 { padding-top: 8px; padding-bottom: 8px; }
+.pb-12 { padding-bottom: 12px; }
+.px-8 { padding-left: 8px; padding-right: 8px; }
+.py-12 { padding-top: 12px; padding-bottom: 12px; }
+.pt-6 { padding-top: 6px; }
+.label-sub { font-size: .8rem; font-weight: 400; }
+
+/* ===== Uppercase VISIVO su nome/cognome ========= */
 .u-upper-visual::part(native) {
   text-transform: uppercase;
-  letter-spacing: .3px; // opzionale per leggibilità
+  letter-spacing: .3px;
+}
+
+/* ===== Google Contacts come un input “vero” ===== */
+app-gcontacts-autocomplete {
+  display: block;
+  width: 100%;
+  margin-top: 4px;    /* evita che la pill venga “coperta” dal bordo top */
+}
+
+/* Se dentro c'è ion-searchbar o ion-input, uniforma lo stile */
+app-gcontacts-autocomplete ion-searchbar,
+app-gcontacts-autocomplete ion-input {
+  --background: var(--ion-color-light, #f4f5f8);
+  --border-radius: 10px;
+  --box-shadow: none;
+  --padding-start: 10px;
+  --padding-end: 10px;
+  height: 44px; /* allinea alle altezze degli input */
+}
+
+/* Se il componente usa un <input> nativo, prova a uniformare comunque */
+app-gcontacts-autocomplete input {
+  width: 100%;
+  height: 44px;
+  border-radius: 10px;
+  background: var(--ion-color-light, #f4f5f8);
+  border: none;
+  padding: 0 10px;
+  outline: none;
+  box-sizing: border-box;
+  font: inherit;
 }

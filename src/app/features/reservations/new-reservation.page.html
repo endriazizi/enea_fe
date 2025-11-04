@@ -1,16 +1,18 @@
-<ion-content class="ion-padding">
+<ion-content class="ion-padding page-resv">
 
-  <form [formGroup]="form" (ngSubmit)="onSubmit()">
+  <form class="compact" [formGroup]="form" (ngSubmit)="onSubmit()">
 
     <!-- ===== Sezione 0: Cerca contatto (Google) - IN ALTO ===== -->
-    <ion-list inset="true" style="margin-top: 8px">
+    <ion-list inset="true" class="mt-6">
       <ion-item lines="full">
         <ion-label position="stacked">Cerca in Google Contacts…</ion-label>
 
+        <!-- 👇 ora si presenta e si comporta come un input, full width -->
         <app-gcontacts-autocomplete
+          class="as-input"
           [results]="gcResults()"
           [searching]="gcSearching()"
-          placeholder="Cerca in Google Contacts..."
+          placeholder="Cerca in Google Contacts…"
           (queryChange)="onGcQueryChange($event)"
           (selected)="onContactSelected($event)">
         </app-gcontacts-autocomplete>
@@ -19,13 +21,13 @@
     </ion-list>
 
     <!-- ===== Sezione 1: Dati cliente ===== -->
-    <ion-list inset="true" style="margin-top: 8px">
+    <ion-list inset="true">
       <ion-item lines="full">
         <ion-label position="stacked">Cognome</ion-label>
         <ion-input
           formControlName="customer_last"
-          class="u-upper-visual"                 <!-- uppercase solo VISIVO -->
-          (ionBlur)="upperOnBlur('customer_last')"  <!-- uppercase REALE su blur -->
+          class="u-upper-visual"
+          (ionBlur)="upperOnBlur('customer_last')"
           autocomplete="family-name"
           inputmode="text"
           spellcheck="false"
@@ -56,7 +58,7 @@
         <ion-input formControlName="email" type="email" autocomplete="email" inputmode="email"></ion-input>
       </ion-item>
 
-      <ion-item lines="none">
+      <ion-item lines="none" class="pt-2 pb-0">
         <ion-note color="danger" *ngIf="emailCtrl.invalid && (emailCtrl.dirty || emailCtrl.touched)">
           Inserisci un’email valida (opzionale).
         </ion-note>
@@ -64,7 +66,7 @@
     </ion-list>
 
     <!-- ===== Sezione 2: Coperti ===== -->
-    <ion-list inset="true" style="margin-top: 12px">
+    <ion-list inset="true">
       <ion-item lines="full">
         <ion-label>Coperti</ion-label>
         <div slot="end" style="display:flex; align-items:center; gap:8px;">
@@ -80,14 +82,13 @@
     </ion-list>
 
     <!-- ===== Sezione 3: Data & Orario ===== -->
-    <ion-list inset="true" style="margin-top: 12px">
+    <ion-list inset="true">
       <ion-item lines="full">
         <ion-label position="stacked">
           Data
-          <div style="font-size:.8rem; font-weight:400">Oggi: {{ todayLabel() }}</div>
+          <div class="label-sub">Oggi: {{ todayLabel() }}</div>
         </ion-label>
 
-        <!-- QUICK DAY PICKER come filtro (props richieste) -->
         <app-date-quick
           [title]="'Giorno rapido'"
           [showTodayLine]="false"
@@ -97,10 +98,9 @@
         </app-date-quick>
       </ion-item>
 
-      <!-- PRANZO -->
-      <div *ngIf="lunchSlots.length" style="padding: 8px 12px 8px">
-        <div style="margin-bottom:6px; font-weight:600;">Pranzo</div>
-        <div style="display:flex; flex-wrap:wrap; gap:8px;">
+      <div *ngIf="lunchSlots.length" class="px-12 py-8">
+        <div class="sec-title">Pranzo</div>
+        <div class="btn-grid">
           <ion-button
             *ngFor="let t of lunchSlots"
             [fill]="selectedTime() === t ? 'solid' : 'outline'"
@@ -111,10 +111,9 @@
         </div>
       </div>
 
-      <!-- CENA -->
-      <div *ngIf="dinnerSlots.length" style="padding: 0 12px 12px">
-        <div style="margin-bottom:6px; font-weight:600;">Cena</div>
-        <div style="display:flex; flex-wrap:wrap; gap:8px;">
+      <div *ngIf="dinnerSlots.length" class="px-12 pb-12">
+        <div class="sec-title">Cena</div>
+        <div class="btn-grid">
           <ion-button
             *ngFor="let t of dinnerSlots"
             [fill]="selectedTime() === t ? 'solid' : 'outline'"
@@ -125,27 +124,26 @@
         </div>
       </div>
 
-      <ion-item lines="none">
+      <ion-item lines="none" class="pt-2 pb-0">
         <ion-note *ngIf="form.value.start_at" color="primary" style="display:block; width:100%;">
           Selezionato: {{ selectedDateHuman() }}, {{ selectedTime() }}
         </ion-note>
       </ion-item>
 
-      <!-- Toggle calendario avanzato -->
-      <div style="padding: 6px 12px 0;">
+      <div class="px-12 pt-6">
         <ion-button fill="clear" size="small" (click)="toggleAdvanced()">
           {{ showAdvanced() ? 'Chiudi calendario' : 'Scegli da calendario' }}
         </ion-button>
         <div *ngIf="showAdvanced()">
           <ion-datetime
             presentation="date-time"
-            [value]="advancedValue()"
-            (ionChange)="onAdvancedPick($event)">
+            [value]="advancedValue()
+            " (ionChange)="onAdvancedPick($event)">
           </ion-datetime>
         </div>
       </div>
 
-      <ion-item lines="none" style="margin-top:6px">
+      <ion-item lines="none" class="pt-2 pb-0">
         <ion-note color="danger" *ngIf="startCtrl.invalid && (startCtrl.dirty || startCtrl.touched)">
           Scegli data e ora (obbligatorio).
         </ion-note>
@@ -153,7 +151,7 @@
     </ion-list>
 
     <!-- ===== Sezione 4: Sala/Tavolo ===== -->
-    <ion-list inset="true" style="margin-top: 12px">
+    <ion-list inset="true">
       <ion-item lines="full">
         <ion-label position="stacked">Sala</ion-label>
         <ion-select
@@ -167,9 +165,8 @@
         </ion-select>
       </ion-item>
 
-      <ion-item lines="full" style="margin-top: 8px">
+      <ion-item lines="full">
         <ion-label position="stacked">Tavolo</ion-label>
-        <!-- ⛔️ niente [disabled] su controlli reattivi; TS farà enable()/disable() -->
         <ion-select
           formControlName="table_id"
           interface="popover"
@@ -182,7 +179,7 @@
     </ion-list>
 
     <!-- ===== Sezione 5: Note ===== -->
-    <ion-list inset="true" style="margin-top: 12px">
+    <ion-list inset="true">
       <ion-item lines="full">
         <ion-label position="stacked">Note</ion-label>
         <ion-textarea
@@ -195,7 +192,7 @@
     </ion-list>
 
     <!-- CTA -->
-    <div style="padding: 12px 8px">
+    <div class="px-8 py-12">
       <ion-button expand="block" size="large" type="submit" [disabled]="loading() || form.invalid">
         {{ loading() ? 'Creazione…' : 'Crea prenotazione' }}
       </ion-button>
@@ -216,6 +213,5 @@
       </ion-fab-button>
     </ion-fab-list>
   </ion-fab>
-  <!-- ====================================================================== -->
 
 </ion-content>

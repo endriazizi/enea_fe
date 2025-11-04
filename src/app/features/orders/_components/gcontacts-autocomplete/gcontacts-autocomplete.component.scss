@@ -1,0 +1,26 @@
+(gca-field, .gca-field) {
+  position: relative;
+  margin-top: 4px;
+}
+ion-input.gca-input::part(native) {
+  background: var(--ion-color-light, #f4f5f8);
+  border-radius: 10px;
+  padding: 0 10px;
+  height: 44px;
+  box-shadow: none;
+}
+(gca-spinner, .gca-spinner) {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+(gca-list, .gca-list) { margin-top: 6px; }
+.gca-title { font-weight: 600; }
+.gca-sub   { font-size: .85rem; opacity: .8; }
+
+/* CTA consenso in linea col campo */
+(gca-consent, .gca-consent) {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 2px;
+}

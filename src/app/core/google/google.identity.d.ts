@@ -1,35 +1,21 @@
-// src/app/core/google/google.identity.d.ts
-// Tipi minimi per Google Identity Services (evita any). Non serve installare @types.
-
+// Tipi minimi per Google Identity Services (Code client). Evita conflitti TS2687.
 export {};
 
 declare global {
-  interface Window {
-    google?: typeof google;
-  }
+  interface Window { google?: any; }
 
   namespace google.accounts.oauth2 {
-    interface TokenResponse {
-      access_token: string;
-      expires_in: number;
-      token_type: string;
-      scope: string;
-    }
-    interface TokenClientConfig {
+    interface CodeResponse { code: string; }
+    interface CodeClientConfig {
       client_id: string;
       scope: string;
-      prompt?: '' | 'consent';
-      callback: (resp: TokenResponse) => void;
+      ux_mode?: 'popup' | 'redirect';
+      redirect_uri?: string;           // 'postmessage' per SPA
+      prompt?: '' | 'consent' | 'select_account' | 'consent select_account';
+      callback: (resp: CodeResponse) => void;
       error_callback?: (err: unknown) => void;
     }
-    interface OverridableTokenClientConfig {
-      prompt?: '' | 'consent';
-      hint?: string;
-    }
-    interface TokenClient {
-      requestAccessToken: (overrideConfig?: OverridableTokenClientConfig) => void;
-    }
-    function initTokenClient(config: TokenClientConfig): TokenClient;
-    function revoke(accessToken: string, done: () => void): void;
+    interface CodeClient { requestCode: () => void; }
+    function initCodeClient(config: CodeClientConfig): CodeClient;
   }
 }

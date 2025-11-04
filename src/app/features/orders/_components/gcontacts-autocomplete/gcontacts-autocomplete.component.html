@@ -1,0 +1,37 @@
+<div class="gca-field">
+  <ion-input
+    class="gca-input"
+    [placeholder]="placeholder"
+    [value]="value()"
+    (ionInput)="onInput($event)">
+  </ion-input>
+
+  <ion-spinner *ngIf="searching" class="gca-spinner"></ion-spinner>
+</div>
+
+<!-- CTA consenso visibile solo quando serve -->
+<div *ngIf="needsConsent" class="gca-consent">
+  <ion-note color="warning" style="margin-right:8px;">Accesso ai contatti necessario</ion-note>
+  <ion-button size="small" fill="outline" (click)="onConnect()">
+    <ion-icon slot="start" name="logo-google"></ion-icon>
+    Connetti Google
+  </ion-button>
+</div>
+
+<ion-list *ngIf="results?.length" inset="true" class="gca-list">
+  <ion-item
+    button
+    detail="false"
+    lines="full"
+    *ngFor="let r of results"
+    (click)="pick(r)">
+    <ion-label>
+      <div class="gca-title">
+        {{ r.displayName || ((r.familyName || '') + (r.givenName ? ' ' + r.givenName : '')) }}
+      </div>
+      <div class="gca-sub">
+        {{ r.phone || r.email }}
+      </div>
+    </ion-label>
+  </ion-item>
+</ion-list>

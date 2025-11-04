@@ -7,7 +7,6 @@
       <ion-item lines="full">
         <ion-label position="stacked">Cerca in Google Contacts…</ion-label>
 
-        <!-- 👇 ora si presenta e si comporta come un input, full width -->
         <app-gcontacts-autocomplete
           class="as-input"
           [results]="gcResults()"
@@ -16,7 +15,15 @@
           (queryChange)="onGcQueryChange($event)"
           (selected)="onContactSelected($event)">
         </app-gcontacts-autocomplete>
+      </ion-item>
 
+      <!-- Banner + CTA: appare finché non c'è consenso/token -->
+      <ion-item lines="none" *ngIf="gcNeedsConsent()" style="padding-top:6px;">
+        <ion-note slot="start" color="warning">Accesso necessario per leggere i contatti Google.</ion-note>
+        <ion-button slot="end" size="small" fill="outline" (click)="onGcConnectClick()">
+          <ion-icon name="logo-google" slot="start"></ion-icon>
+          Connetti Google
+        </ion-button>
       </ion-item>
     </ion-list>
 
@@ -98,6 +105,7 @@
         </app-date-quick>
       </ion-item>
 
+      <!-- PRANZO -->
       <div *ngIf="lunchSlots.length" class="px-12 py-8">
         <div class="sec-title">Pranzo</div>
         <div class="btn-grid">
@@ -111,6 +119,7 @@
         </div>
       </div>
 
+      <!-- CENA -->
       <div *ngIf="dinnerSlots.length" class="px-12 pb-12">
         <div class="sec-title">Cena</div>
         <div class="btn-grid">
@@ -130,6 +139,7 @@
         </ion-note>
       </ion-item>
 
+      <!-- Toggle calendario avanzato -->
       <div class="px-12 pt-6">
         <ion-button fill="clear" size="small" (click)="toggleAdvanced()">
           {{ showAdvanced() ? 'Chiudi calendario' : 'Scegli da calendario' }}
@@ -137,8 +147,8 @@
         <div *ngIf="showAdvanced()">
           <ion-datetime
             presentation="date-time"
-            [value]="advancedValue()
-            " (ionChange)="onAdvancedPick($event)">
+            [value]="advancedValue()"
+            (ionChange)="onAdvancedPick($event)">
           </ion-datetime>
         </div>
       </div>

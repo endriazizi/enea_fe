@@ -5,6 +5,7 @@ import { firstValueFrom } from 'rxjs';
 
 // Angular
 import { NgIf, NgFor } from '@angular/common';
+import { HttpClient, HttpParams } from '@angular/common/http';
 
 // Ionic standalone
 import {
@@ -21,14 +22,13 @@ import { ReservationsApi, Room, Table, Reservation } from '../../core/reservatio
 // UI: date quick (7 giorni)
 import { DateQuickComponent } from '../../features/reservations/_components/ui/date-quick/date-quick.component';
 
-// Google contacts
+// Google contacts: solo tipi per compatibilità
 import {
   GContactsAutocompleteComponent,
   GContactPick
 } from './_components/gcontacts-autocomplete/gcontacts-autocomplete.component';
 import { GoogleContactsService } from '../../core/google/google-contacts.service';
 
-// Notifiche
 import { EmailNotifyService } from '../../core/notifications/email-notify.service';
 import { WhatsAppService } from '../../core/notifications/whatsapp.service';
 
@@ -55,25 +55,133 @@ export class NewReservationPage implements OnDestroy {
   private gcs    = inject(GoogleContactsService);
   private mail   = inject(EmailNotifyService);
   private wa     = inject(WhatsAppService);
+  private http   = inject(HttpClient);
 
   // ==== UI state ====
   loading = signal(false);
   rooms   = signal<Room[]>([]);
   tables  = signal<Table[]>([]);
 
-  // ==== Google Contacts ====
-  gcResults   = signal<GContactPick[]>([]);
-  gcSearching = this.gcs.searching;
+  // ==== Google Contacts (pagina) ============================================
+  // Nota importante: per non far bloccare il popup dai browser, lo apriamo SOLO
+  // su gesto esplicito (click) → vedi onGcConnectClick().
+  gcResults      = signal<GContactPick[]>([]);
+  gcSearching    = signal(false);
+  gcNeedsConsent = signal(true);   // ⬅️ di base TRUE, si spegne alla prima ricerca OK
+  private lastGcQuery = '';
+
+  private googleApiBase() { return '/api/google'; }
+  private googleClientId(): string {
+    const meta = document.querySelector('meta[name="google-client-id"]') as HTMLMetaElement | null;
+    return meta?.content || '512175551489-082s3f7pri0rl9uv0ujkiko31dnoo8o7.apps.googleusercontent.com';
+  }
+  private googleScopes(): string {
+    return 'https://www.googleapis.com/auth/contacts.readonly';
+  }
+
+  // Carica GIS una sola volta
+  private _gsiPromise: Promise<void> | null = null;
+  private async loadGIS(): Promise<void> {
+    if (this._gsiPromise) return this._gsiPromise;
+    this._gsiPromise = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://accounts.google.com/gsi/client';
+      s.async = true; s.defer = true;
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error('gsi_load_failed'));
+      document.head.appendChild(s);
+    });
+    return this._gsiPromise;
+  }
+
+  // 🔐 Ottiene il code in popup (gesto esplicito)
+  private async obtainAuthCodeViaPopup(): Promise<string> {
+    await this.loadGIS();
+    const g: any = (window as any).google;
+    if (!g?.accounts?.oauth2?.initCodeClient) throw new Error('gsi_unavailable');
+    return new Promise<string>((resolve, reject) => {
+      try {
+        const client = g.accounts.oauth2.initCodeClient({
+          client_id: this.googleClientId(),
+          scope: this.googleScopes(),
+          ux_mode: 'popup',
+          callback: (resp: any) => {
+            if (resp?.code) resolve(resp.code);
+            else reject(new Error(resp?.error || 'no_code'));
+          },
+        });
+        client.requestCode();
+      } catch (e) {
+        reject(e);
+      }
+    });
+  }
+
+  // 🔄 Scambia il code sul BE e persiste i token (owner='default')
+  private async exchangeCodeOnBackend(code: string): Promise<boolean> {
+    try {
+      const r: any = await firstValueFrom(
+        this.http.post(`${this.googleApiBase()}/oauth/exchange`, { code })
+      );
+      return !!r?.ok;
+    } catch {
+      return false;
+    }
+  }
+
+  // 🔎 Ricerca "raw": se 401 → attiva banner "Connetti Google"
+  private async searchGoogleContactsRaw(query: string, limit = 12): Promise<GContactPick[]> {
+    const params = new HttpParams().set('q', query).set('limit', String(limit));
+    try {
+      const r: any = await firstValueFrom(
+        this.http.get(`${this.googleApiBase()}/people/search`, { params })
+      );
+      if (r?.ok) {
+        this.gcNeedsConsent.set(false);
+        return r.items || [];
+      }
+      return [];
+    } catch (e: any) {
+      if (e?.status === 401 && e?.error?.reason === 'google_consent_required') {
+        // ⚠️ Non aprire popup qui: siamo fuori dal gesto utente → verrebbe bloccato.
+        this.gcNeedsConsent.set(true);
+      }
+      return [];
+    }
+  }
 
   async onGcQueryChange(q: string) {
     const query = (q || '').trim();
+    this.lastGcQuery = query;
     if (query.length < 2) { this.gcResults.set([]); return; }
+    this.gcSearching.set(true);
     try {
-      const rows = await this.gcs.searchContacts(query, 12);
+      const rows = await this.searchGoogleContactsRaw(query, 12);
       this.gcResults.set(rows || []);
+    } finally {
+      this.gcSearching.set(false);
+    }
+  }
+
+  async onGcConnectClick() {
+    try {
+      const code = await this.obtainAuthCodeViaPopup();      // 🪟 popup su gesto esplicito
+      const ok   = await this.exchangeCodeOnBackend(code);   // 💾 persistenza token
+      if (ok) {
+        this.gcNeedsConsent.set(false);
+        if (this.lastGcQuery.length >= 2) {
+          this.gcSearching.set(true);
+          const rows = await this.searchGoogleContactsRaw(this.lastGcQuery, 12);
+          this.gcResults.set(rows || []);
+          this.gcSearching.set(false);
+        }
+        (await this.toast.create({ message: 'Google connesso ✅', duration: 1400 })).present();
+      } else {
+        (await this.toast.create({ message: 'Connessione annullata/negata', duration: 1600, color: 'medium' })).present();
+      }
     } catch (e) {
-      console.warn('🔎 [NewReservation] Google search KO', e);
-      this.gcResults.set([]);
+      console.warn('🔐 [GC] Popup/Exchange KO', e);
+      (await this.toast.create({ message: 'Accesso Google annullato', duration: 1400, color: 'medium' })).present();
     }
   }
 
@@ -103,7 +211,6 @@ export class NewReservationPage implements OnDestroy {
   selectedDateISO() { return this.pickedDateISO(); }
   selectedTime()    { return this.pickedTime() || ''; }
 
-  // alias richiesti per integrare il QUICK DAY PICKER "come filtro"
   selectedDayForPicker() { return this.selectedDateISO(); }
   onQuickFilterDay(dateISO: string) { this.onQuickDate(dateISO); }
 
@@ -145,7 +252,7 @@ export class NewReservationPage implements OnDestroy {
   get emailCtrl(): AbstractControl { return this.form.controls.email!; }
   get startCtrl(): AbstractControl { return this.form.controls.start_at!; }
 
-  // 🔠 Uppercase "reale" solo su blur/submit (evita problemi con IME Android).
+  // Uppercase reale su blur/submit (IME Android friendly)
   upperOnBlur(ctrl: 'customer_last'|'customer_first') {
     const raw  = (this.form.controls[ctrl].value ?? '') as string;
     const next = raw ? raw.toLocaleUpperCase('it-IT') : raw;
@@ -225,7 +332,6 @@ export class NewReservationPage implements OnDestroy {
   async submit() {
     if (this.form.invalid) { this.form.markAllAsTouched(); return; }
 
-    // normalizza anche se l’utente clicca subito “Crea”
     this.upperOnBlur('customer_last');
     this.upperOnBlur('customer_first');
 

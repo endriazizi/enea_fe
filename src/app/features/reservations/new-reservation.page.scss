@@ -82,3 +82,15 @@ app-gcontacts-autocomplete input {
   box-sizing: border-box;
   font: inherit;
 }
+
+
+/* Compatta tutti i list della pagina */
+ion-list[inset] {
+  margin-top: 8px !important;
+}
+ion-item {
+  --inner-padding-top: 6px;
+  --inner-padding-bottom: 6px;
+  --padding-top: 2px;
+  --padding-bottom: 2px;
+}

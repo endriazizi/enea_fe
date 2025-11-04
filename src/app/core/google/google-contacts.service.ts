@@ -1,135 +1,105 @@
-// src/app/core/google/google-contacts.service.ts
-//
-// GoogleContactsService
-// - OAuth con Google Identity Services (GIS) lato SPA
-// - People API: /v1/people:searchContacts
-// - Ritorna GContactPick (compatibile col tuo componente)
-// - Fix: usa environment.googleScopes (aggiunto) e controllo revoke come funzione.
+// core/google/google-contacts.service.ts
+// ============================================================================
+// Flusso "FE-first" con gesto utente esplicito:
+// - Se /people/search risponde 401 { reason: 'google_consent_required' } →
+//   set needsConsent=true e NON apro il popup autonomamente (browser block).
+// - L'utente tocca "Connetti Google" → ottengo `code` dal popup GIS →
+//   POST a /api/google/oauth/exchange → salvo token → ritento la ricerca.
+// ============================================================================
 
 import { Injectable, signal } from '@angular/core';
-import { environment } from '../../environments/environment';
+import { HttpClient } from '@angular/common/http';
+import { firstValueFrom } from 'rxjs';
 
 export interface GContactPick {
-  displayName?: string | null;
-  givenName?: string | null;
-  familyName?: string | null;
-  phone?: string | null;
-  email?: string | null;
+  displayName?: string;
+  familyName?: string;
+  givenName?: string;
+  email?: string;
+  phone?: string;
 }
 
 @Injectable({ providedIn: 'root' })
 export class GoogleContactsService {
-  private accessToken: string | null = null;
-  private expiresAt = 0; // epoch seconds
-
   searching = signal(false);
+  needsConsent = signal(false);         // 👈 stato osservabile dalla UI
 
-  /** Richiede/riusa il token GIS. Prompt solo se serve. */
-  private async ensureToken(prompt: '' | 'consent' = ''): Promise<string> {
-    const now = Math.floor(Date.now() / 1000);
-    if (this.accessToken && this.expiresAt - 60 > now) {
-      return this.accessToken;
-    }
+  constructor(private http: HttpClient) {}
 
-    if (!window.google?.accounts?.oauth2) {
-      throw new Error('Google Identity Services non è disponibile (script non caricato?)');
-    }
+  private apiBase() { return '/api/google'; }
 
-    const scopes =
-      environment.googleScopes?.trim() ||
-      'https://www.googleapis.com/auth/contacts.readonly';
+  private googleClientId(): string {
+    const meta = document.querySelector('meta[name="google-client-id"]') as HTMLMetaElement | null;
+    return meta?.content || '512175551489-082s3f7pri0rl9uv0ujkiko31dnoo8o7.apps.googleusercontent.com';
+  }
+  private googleScopes(): string {
+    return 'https://www.googleapis.com/auth/contacts.readonly';
+  }
 
-    const token = await new Promise<string>((resolve, reject) => {
-      const client = window.google!.accounts.oauth2.initTokenClient({
-        client_id: environment.googleClientId,
-        scope: scopes,
-        prompt,
-        callback: (resp) => {
-          const at = (resp as any)?.access_token as string | undefined;
-          const ttl = (resp as any)?.expires_in as number | undefined;
-          if (!at) return reject(new Error('Token mancante'));
-          this.accessToken = at;
-          const nowS = Math.floor(Date.now() / 1000);
-          this.expiresAt = nowS + (ttl ?? 3000);
-          resolve(at);
-        },
-        error_callback: (err) => reject(err),
-      });
+  // Carico GIS on-demand
+  private _gsiPromise: Promise<void> | null = null;
+  private loadGIS(): Promise<void> {
+    if (this._gsiPromise) return this._gsiPromise;
+    this._gsiPromise = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://accounts.google.com/gsi/client';
+      s.async = true; s.defer = true;
+      s.onload = () => resolve();
+      s.onerror = () => reject(new Error('gsi_load_failed'));
+      document.head.appendChild(s);
+    });
+    return this._gsiPromise;
+  }
+  private gis(): any { return (window as any).google; }
 
-      client.requestAccessToken({ prompt });
+  // 👇 Chiamata esplicita dalla UI (gesto utente): apre popup e scambia il code
+  async connect(): Promise<boolean> {
+    await this.loadGIS();
+    const g = this.gis();
+    if (!g?.accounts?.oauth2?.initCodeClient) return false;
+
+    const code: string = await new Promise((resolve, reject) => {
+      try {
+        const client = g.accounts.oauth2.initCodeClient({
+          client_id: this.googleClientId(),
+          scope: this.googleScopes(),
+          ux_mode: 'popup',
+          callback: (resp: any) => {
+            if (resp?.code) resolve(resp.code);
+            else reject(new Error(resp?.error || 'no_code'));
+          },
+        });
+        client.requestCode();
+      } catch (e) {
+        reject(e);
+      }
     });
 
-    return token;
+    const r: any = await firstValueFrom(
+      this.http.post(`${this.apiBase()}/oauth/exchange`, { code })
+    );
+    const ok = !!r?.ok;
+    if (ok) this.needsConsent.set(false);
+    return ok;
   }
 
-  /** Opzionale: revoca token esplicita */
-  async revoke(): Promise<void> {
-    // ✅ evita TS2774: verifica che sia proprio una funzione
-    const canRevoke =
-      typeof window.google?.accounts?.oauth2?.revoke === 'function';
-    if (this.accessToken && canRevoke) {
-      await new Promise<void>((r) =>
-        window.google!.accounts.oauth2.revoke(this.accessToken!, r)
-      );
-    }
-    this.accessToken = null;
-    this.expiresAt = 0;
-  }
-
-  /**
-   * Autocomplete: cerca tra i contatti dell’utente.
-   * @param query stringa (min 2 char)
-   * @param pageSize default 10
-   */
-  async searchContacts(query: string, pageSize = 10): Promise<GContactPick[]> {
-    const q = (query || '').trim();
-    if (q.length < 2) return [];
-
+  // Ricerca contatti (gestisce 401 → needsConsent)
+  async searchContacts(q: string, limit = 12): Promise<GContactPick[]> {
+    const query = (q || '').trim();
+    if (query.length < 2) return [];
     this.searching.set(true);
     try {
-      const token = await this.ensureToken('');
-      const url = new URL('https://people.googleapis.com/v1/people:searchContacts');
-      url.searchParams.set('query', q);
-      url.searchParams.set('pageSize', String(pageSize));
-      url.searchParams.set('readMask', 'names,emailAddresses,phoneNumbers');
-
-      const res = await fetch(url.toString(), {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (res.status === 401) {
-        const newToken = await this.ensureToken('consent');
-        const retry = await fetch(url.toString(), {
-          headers: { Authorization: `Bearer ${newToken}` },
-        });
-        return this.mapPeople(await retry.json());
+      const r: any = await firstValueFrom(
+        this.http.get(`${this.apiBase()}/people/search`, { params: { q: query, limit } })
+      );
+      return r?.ok ? (r.items || []) : [];
+    } catch (e: any) {
+      if (e?.status === 401 && e?.error?.reason === 'google_consent_required') {
+        this.needsConsent.set(true); // 👈 la UI mostrerà il bottone “Connetti Google”
       }
-
-      if (!res.ok) {
-        const errText = await res.text().catch(() => '');
-        throw new Error(`People API error ${res.status}: ${errText || res.statusText}`);
-      }
-
-      const json = await res.json();
-      return this.mapPeople(json);
+      return [];
     } finally {
       this.searching.set(false);
     }
-  }
-
-  // -------------------- Helpers --------------------
-
-  private mapPeople(json: any): GContactPick[] {
-    const people = Array.isArray(json?.results) ? json.results : [];
-    return people.map((r: any) => {
-      const p = r.person || r;
-      const nameObj = (p.names && p.names[0]) || {};
-      const displayName = nameObj.displayName || null;
-      const givenName = nameObj.givenName || null;
-      const familyName = nameObj.familyName || null;
-      const email = (p.emailAddresses && p.emailAddresses[0]?.value) || null;
-      const phone = (p.phoneNumbers && p.phoneNumbers[0]?.value) || null;
-      return { displayName, givenName, familyName, email, phone };
-    });
   }
 }

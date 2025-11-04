@@ -1,3 +1,4 @@
+<!-- src/app/features/orders/order-builder.page.html -->
 <ion-header>
   <ion-toolbar>
     <ion-title>Admin</ion-title>
@@ -8,14 +9,10 @@
 </ion-header>
 
 <ion-content>
-
-  <!-- 🔽 Prenotazione (oggi) -->
+  <!-- Selettori prenotazione/cliente/telefono/note/coperti... (come prima) -->
   <ion-item>
     <ion-label position="stacked">Prenotazione (oggi)</ion-label>
-    <ion-select
-      placeholder="Seleziona (opzionale)"
-      [value]="selectedReservation()"
-      (ionChange)="onPickReservation($any($event.detail).value)">
+    <ion-select placeholder="Seleziona (opzionale)" [value]="selectedReservation()" (ionChange)="onPickReservation($any($event.detail).value)">
       <ion-select-option *ngFor="let r of pickList()" [value]="r">
         {{ r.start_at | date:'HH:mm' }} — {{ r.display_name || (r.customer_first + ' ' + (r.customer_last || '')) || 'Cliente' }}
         ({{ r.party_size || '?' }} coperti)
@@ -23,29 +20,21 @@
     </ion-select>
   </ion-item>
 
-  <!-- 🔽 Anagrafica -->
   <ion-item>
     <ion-label position="stacked">Cliente</ion-label>
-    <ion-input inputmode="text" placeholder="Nome e cognome"
-               [value]="customerName()"
-               (ionInput)="customerName.set($any($event.target).value || '')"></ion-input>
+    <ion-input inputmode="text" placeholder="Nome e cognome" [value]="customerName()" (ionInput)="onInputName($event)"></ion-input>
   </ion-item>
 
   <ion-item>
     <ion-label position="stacked">Telefono</ion-label>
-    <ion-input inputmode="tel" placeholder="+39…"
-               [value]="customerPhone()"
-               (ionInput)="customerPhone.set($any($event.target).value || '')"></ion-input>
+    <ion-input inputmode="tel" placeholder="+39…" [value]="customerPhone()" (ionInput)="onInputPhone($event)"></ion-input>
   </ion-item>
 
   <ion-item>
     <ion-label position="stacked">Note</ion-label>
-    <ion-textarea autoGrow="true" placeholder="Es. senza cipolla"
-                  [value]="note()"
-                  (ionInput)="note.set($any($event.target).value || '')"></ion-textarea>
+    <ion-textarea autoGrow="true" placeholder="Es. senza cipolla" [value]="note()" (ionInput)="onInputNote($event)"></ion-textarea>
   </ion-item>
 
-  <!-- 🔽 Coperti -->
   <div style="padding:16px 16px 8px;">
     <div style="display:flex; align-items:center; gap:12px;">
       <div style="font-weight:600;">Coperti</div>
@@ -56,15 +45,13 @@
     <small>€ {{ COVER_PRICE | number:'1.2-2' }} a coperto (conteggiato nel totale)</small>
   </div>
 
-  <!-- 🔽 Categorie -->
-  <ion-segment [value]="selectedCategory()"
-               (ionChange)="selectedCategory.set($any($event.detail).value)"
-               mode="md" style="margin:8px 12px;">
+  <!-- Categorie -->
+  <ion-segment [value]="selectedCategory()" (ionChange)="selectedCategory.set($any($event.detail).value)" mode="md" style="margin:8px 12px;">
     <ion-segment-button value="TUTTI">TUTTI</ion-segment-button>
     <ion-segment-button *ngFor="let c of categories()" [value]="c">{{ c }}</ion-segment-button>
   </ion-segment>
 
-  <!-- 🔽 Grid menu -->
+  <!-- Grid menu -->
   <ion-grid>
     <ion-row>
       <ion-col size="12" *ngFor="let m of filteredMenu(); trackBy: trackByMenuId">
@@ -93,15 +80,15 @@
     </ion-row>
   </ion-grid>
 
-  <!-- === 📦 RIEPILOGO CARRELLO — SEMPRE QUI, sticky sopra al footer ======== -->
+  <!-- 📦 RIEPILOGO CARRELLO (sempre sopra al footer) -->
   <ion-list class="cart-summary" inset="true">
     <ion-item lines="full">
       <ion-label>
-        <div class="cs-header">
-          <div class="title">Carrello</div>
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div style="font-weight:600;">Carrello</div>
           <ion-badge color="primary">{{ itemsCount() }}</ion-badge>
         </div>
-        <div class="totline">
+        <div>
           <small>
             Base: € {{ cartBaseTotal() | number:'1.2-2' }}
             <ng-container *ngIf="hasExtrasInCart()">
@@ -113,18 +100,17 @@
       </ion-label>
     </ion-item>
 
-    <!-- righe carrello -->
     <ion-item *ngFor="let l of cart()" lines="full">
       <ion-label>
-        <div class="line-top">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
           <div>
             <strong>{{ l.name }}</strong>
-            <ion-icon *ngIf="(l.notes || '').trim()" name="color-wand-outline" title="Personalizzato"></ion-icon>
+            <ion-icon *ngIf="(l.notes || '').trim()" name="color-wand-outline" title="Personalizzato" style="margin-left:6px;"></ion-icon>
           </div>
           <div>× {{ l.qty }}</div>
         </div>
 
-        <div class="line-sub">
+        <div>
           <small>
             Base: € {{ l.price | number:'1.2-2' }}
             <ng-container *ngIf="(l.extra_total || 0) > 0">
@@ -134,8 +120,8 @@
           </small>
         </div>
 
-        <div *ngIf="(l.notes || '').trim()" class="line-notes">
-          <small>{{ l.notes }}</small>
+        <div *ngIf="(l.notes || '').trim()">
+          <small style="opacity:.8">{{ l.notes }}</small>
         </div>
       </ion-label>
 
@@ -153,95 +139,74 @@
       <ion-label><ion-note color="medium">Carrello vuoto.</ion-note></ion-label>
     </ion-item>
   </ion-list>
-  <div class="cart-spacer"></div>
-  <!-- === /RIEPILOGO CARRELLO ============================================== -->
+  <div class="cart-summary-spacer"></div>
 
-  <!-- 🔽 Footer sticky (totali) -->
+  <!-- Footer sticky -->
   <div class="cart-footer">
     <div>
       <small>
         {{ itemsCount() }} articoli — Totale € {{ total() | number:'1.2-2' }}
-        <ng-container *ngIf="includeExtrasInTotal()"> (incl. extra)</ng-container>
+        <ng-container *ngIf="includeExtrasInTotal()">(incl. extra)</ng-container>
       </small><br>
       <small class="covers">Coperti: {{ covers() }} × € {{ COVER_PRICE | number:'1.2-2' }} = € {{ (covers() * COVER_PRICE) | number:'1.2-2' }}</small>
     </div>
-
     <div style="display:flex; gap:8px;">
       <ion-button size="small" fill="outline" (click)="clearCart()">Svuota</ion-button>
       <ion-button size="small" (click)="confirmOrder()">Conferma ordine</ion-button>
     </div>
+
+    <!-- mini-riepilogo extra per riga -->
+    <div class="grand" *ngIf="includeExtrasInTotal() && hasExtrasInCart()">
+      <div *ngFor="let l of cart()">
+        <ng-container *ngIf="(l.extra_total||0) > 0">
+          <small>• {{ l.name }} × {{ l.qty }} — +€ {{ (l.extra_total! * l.qty) | number:'1.2-2' }}</small>
+        </ng-container>
+      </div>
+    </div>
   </div>
 
-  <!-- ====================== Modal PERSONALIZZA ============================= -->
+  <!-- Modal personalizzazione -->
   <ion-modal [isOpen]="customOpen()">
     <ng-template>
       <ion-header>
         <ion-toolbar>
           <ion-title>Personalizza — {{ targetItem()?.name }}</ion-title>
-          <ion-buttons slot="end">
-            <ion-button (click)="customOpen.set(false)">Chiudi</ion-button>
-          </ion-buttons>
+          <ion-buttons slot="end"><ion-button (click)="customOpen.set(false)">Chiudi</ion-button></ion-buttons>
         </ion-toolbar>
       </ion-header>
 
       <ion-content class="ion-padding">
-
-        <!-- Toggle somma extra nel totale -->
+        <!-- Toggle somma extra -->
         <ion-item lines="full">
           <ion-label>Somma EXTRA nel totale</ion-label>
-          <ion-toggle
-            [checked]="includeExtrasInTotal()"
-            (ionChange)="includeExtrasInTotal.set(!!$any($event.detail).checked)">
-          </ion-toggle>
+          <ion-toggle [checked]="includeExtrasInTotal()" (ionChange)="includeExtrasInTotal.set(!!$any($event.detail).checked)"></ion-toggle>
         </ion-item>
 
-        <!-- Ingredienti base (toggle SENZA) -->
+        <!-- Base -->
         <div style="margin-top:12px;">
           <div class="sec-title">Ingredienti base</div>
-
-          <div *ngIf="ingLoading()" style="padding:8px 0;">
-            <ion-note color="medium">Caricamento ingredienti…</ion-note>
-          </div>
-
           <div class="chips-wrap">
-            <ion-chip *ngFor="let b of (ing() | slice:0: ing().length)"
-                      [outline]="true"
-                      [color]="isBaseRemoved(b.ingredient_id) ? 'danger' : 'medium'"
-                      (click)="toggleBase(b.ingredient_id)">
-              <ion-icon name="close-circle" *ngIf="isBaseRemoved(b.ingredient_id)"></ion-icon>
+            <ion-chip *ngFor="let b of baseList()" [outline]="true" [color]="isBaseRemoved(b.ingredient_id) ? 'danger' : 'medium'" (click)="toggleBase(b.ingredient_id)">
               <ion-label>{{ b.name }}</ion-label>
-              <ion-icon *ngIf="b.allergen === 1" name="warning-outline" title="Allergene" style="margin-left:4px;"></ion-icon>
-              <ion-badge *ngIf="isBaseRemoved(b.ingredient_id)" color="danger" style="margin-left:6px;">SENZA</ion-badge>
+              <span class="chip-flag senza" *ngIf="isBaseRemoved(b.ingredient_id)">SENZA</span>
             </ion-chip>
           </div>
-
-          <ion-note *ngIf="(ing() || []).length === 0 && !ingLoading()" color="medium">
-            Nessun ingrediente base disponibile.
-          </ion-note>
+          <ion-note *ngIf="baseList().length === 0" color="medium">Nessun ingrediente base disponibile.</ion-note>
         </div>
 
-        <!-- Extra con + / − -->
+        <!-- Extra (GLOBALI - BASE) -->
         <div style="margin-top:16px;">
           <div class="sec-title">Extra</div>
-
           <div class="chips-wrap">
-            <ng-container *ngFor="let x of (ing() | slice:0: ing().length)">
-              <ng-container *ngIf="x.is_extra === 1">
-                <ion-chip [outline]="true">
-                  <ion-label>{{ x.name }}</ion-label>
-                  <ion-icon *ngIf="x.allergen === 1" name="warning-outline" title="Allergene"
-                            style="margin-left:2px; margin-right:2px;"></ion-icon>
-                  <ion-button size="small" fill="clear" (click)="decExtra(x.ingredient_id)">−</ion-button>
-                  <ion-badge color="tertiary">{{ getExtraQty(x.ingredient_id) }}</ion-badge>
-                  <ion-button size="small" fill="clear" (click)="incExtra(x.ingredient_id)">+</ion-button>
-                  <ion-note *ngIf="x.price_extra != null" style="margin-left:6px;">
-                    +€ {{ x.price_extra | number:'1.2-2' }}
-                  </ion-note>
-                </ion-chip>
-              </ng-container>
-            </ng-container>
+            <ion-chip *ngFor="let x of extras()" [outline]="true" [color]="getExtraQty(x.id) > 0 ? 'success' : 'medium'">
+              <ion-label>{{ x.name }}</ion-label>
+              <span class="chip-flag aggiungi" *ngIf="getExtraQty(x.id) > 0">AGGIUNGI</span>
+              <ion-button size="small" fill="clear" (click)="decExtra(x.id)">−</ion-button>
+              <ion-badge color="tertiary">{{ getExtraQty(x.id) }}</ion-badge>
+              <ion-button size="small" fill="clear" (click)="incExtra(x.id)">+</ion-button>
+              <ion-note *ngIf="x.price_extra != null" class="px">+€ {{ x.price_extra | number:'1.2-2' }}</ion-note>
+            </ion-chip>
           </div>
-
           <ion-note *ngIf="!hasExtras()" color="medium">Nessun extra configurato per questo prodotto.</ion-note>
 
           <div style="margin-top:8px;" *ngIf="extraCostPreview() > 0">
@@ -255,12 +220,7 @@
         <!-- Note manuali -->
         <ion-item lines="full" style="margin-top:16px;">
           <ion-label position="stacked">Note aggiuntive</ion-label>
-          <ion-textarea
-            [value]="modalNote()"
-            (ionInput)="modalNote.set($any($event.target).value || '')"
-            autoGrow="true"
-            placeholder="Es. ben cotta, consegna a fine tavolo…">
-          </ion-textarea>
+          <ion-textarea [value]="modalNote()" (ionInput)="modalNote.set($any($event.target).value || '')" autoGrow="true" placeholder="Es. ben cotta, consegna a fine tavolo…"></ion-textarea>
         </ion-item>
 
         <!-- Preset -->
@@ -283,21 +243,14 @@
               </ion-buttons>
             </ion-item>
           </ion-list>
-
-          <ion-note *ngIf="presetsForTarget().length === 0" color="medium">
-            Nessun preset salvato per questo prodotto.
-          </ion-note>
+          <ion-note *ngIf="presetsForTarget().length === 0" color="medium">Nessun preset salvato per questo prodotto.</ion-note>
         </div>
 
-        <!-- CTA modale -->
         <div style="display:flex; gap:8px; margin-top:16px;">
           <ion-button expand="block" (click)="addCustomToCartFromModal()">Aggiungi al carrello</ion-button>
           <ion-button expand="block" fill="outline" (click)="customOpen.set(false)">Chiudi</ion-button>
         </div>
-
       </ion-content>
     </ng-template>
   </ion-modal>
-  <!-- ==================== /Modal PERSONALIZZA ============================== -->
-
 </ion-content>

@@ -24,8 +24,12 @@
         <ion-label position="stacked">Cognome</ion-label>
         <ion-input
           formControlName="customer_last"
-          (ionInput)="forceUpper('customer_last', $event)"
-          autocomplete="family-name">
+          class="u-upper-visual"                 <!-- uppercase solo VISIVO -->
+          (ionBlur)="upperOnBlur('customer_last')"  <!-- uppercase REALE su blur -->
+          autocomplete="family-name"
+          inputmode="text"
+          spellcheck="false"
+          autocorrect="off">
         </ion-input>
       </ion-item>
 
@@ -33,8 +37,12 @@
         <ion-label position="stacked">Nome</ion-label>
         <ion-input
           formControlName="customer_first"
-          (ionInput)="forceUpper('customer_first', $event)"
-          autocomplete="given-name">
+          class="u-upper-visual"
+          (ionBlur)="upperOnBlur('customer_first')"
+          autocomplete="given-name"
+          inputmode="text"
+          spellcheck="false"
+          autocorrect="off">
         </ion-input>
       </ion-item>
 

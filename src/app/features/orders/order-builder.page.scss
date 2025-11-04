@@ -1,35 +1,30 @@
-/* === Stili originali (immutati) =========================================== */
+/* src/app/features/orders/order-builder.page.scss */
+/* Mantengo le tue classi e aggiungo solo il necessario */
 .menu-card { border-radius: 16px; box-shadow: 0 8px 16px rgba(0,0,0,.06); }
 .menu-card .price { font-weight: 700; margin-bottom: 8px; }
 .menu-card .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 
+.cart-summary { margin: 8px 12px; }
+.cart-summary-spacer { height: 6px; }
 .cart-footer {
-  --footer-h: 72px; /* usata anche per il riepilogo sticky */
   position: sticky; bottom: 0; z-index: 5;
-  display: flex; gap: 12px; align-items: center; justify-content: space-between;
+  display: flex; gap: 12px; align-items: flex-start; justify-content: space-between;
   padding: 10px 12px; background: var(--ion-color-light);
   border-top: 1px solid rgba(0,0,0,.08);
+  flex-wrap: wrap;
 }
 .cart-footer .covers { opacity: .8; font-size: .9em; }
-.cart-footer .grand  { margin-top: 2px; }
+.cart-footer .grand  { width: 100%; margin-top: 4px; }
 
-/* === RIEPILOGO CARRELLO sticky (sopra al footer) ========================== */
-.cart-summary {
-  position: sticky;
-  bottom: calc(var(--footer-h, 72px) + 8px);
-  z-index: 4;
-  margin: 8px 12px;
-  border-radius: 12px;
-  background: var(--ion-background-color);
-  box-shadow: 0 6px 14px rgba(0,0,0,.06);
-}
-.cart-summary .cs-header { display:flex; justify-content:space-between; align-items:center; }
-.cart-summary .title { font-weight: 600; }
-.cart-summary .line-top { display:flex; justify-content:space-between; align-items:center; }
-.cart-summary .line-sub { margin-top: 2px; opacity:.9; }
-.cart-summary .line-notes { margin-top: 4px; opacity:.8; }
-.cart-spacer { height: 8px; }
-
-/* === Piccoli ritocchi modale ============================================== */
 .sec-title { font-weight: 600; margin-bottom: 6px; }
-.chips-wrap { display:flex; gap:8px; flex-wrap:wrap; }
+.chips-wrap { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* Badge interni ai chip */
+.chip-flag {
+  font-size: 10px; line-height: 1; padding: 4px 6px; border-radius: 999px; margin-left: 6px;
+  border: 1px solid transparent; user-select: none;
+}
+.chip-flag.senza    { color: #b00020; border-color: #b00020; }
+.chip-flag.aggiungi { color: #0a7a3e; border-color: #0a7a3e; }
+
+.px { margin-left: 6px; opacity: .85; }

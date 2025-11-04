@@ -1,0 +1,5 @@
+/* Uppercase solo VISIVO per gli IonInput senza toccare il valore in tempo reale */
+.u-upper-visual::part(native) {
+  text-transform: uppercase;
+  letter-spacing: .3px; // opzionale per leggibilità
+}

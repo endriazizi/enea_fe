@@ -36,6 +36,7 @@ import { WhatsAppService } from '../../core/notifications/whatsapp.service';
   standalone: true,
   selector: 'app-new-reservation',
   templateUrl: './new-reservation.page.html',
+  styleUrls: ['./new-reservation.page.scss'],
   imports: [
     ReactiveFormsModule, NgIf, NgFor, RouterLink,
     IonContent, IonHeader, IonToolbar, IonTitle,
@@ -148,9 +149,12 @@ export class NewReservationPage implements OnDestroy {
   get emailCtrl(): AbstractControl { return this.form.controls.email!; }
   get startCtrl(): AbstractControl { return this.form.controls.start_at!; }
 
-  forceUpper(ctrl: 'customer_last'|'customer_first', ev: CustomEvent) {
-    const v = (ev?.detail?.value ?? '') as string;
-    this.form.controls[ctrl].setValue(v.toUpperCase());
+  // 🔠 Uppercase: NIENTE più setValue ad ogni battuta (ionInput) → su Android l'IME impazzisce.
+  //    Facciamo uppercase "vero" solo su blur/submit; uppercase VISIVO con CSS.
+  upperOnBlur(ctrl: 'customer_last'|'customer_first') {
+    const raw  = (this.form.controls[ctrl].value ?? '') as string;
+    const next = raw ? raw.toLocaleUpperCase('it-IT') : raw;
+    this.form.controls[ctrl].setValue(next, { emitEvent: false }); // no eventi = niente salto cursore
   }
 
   incParty() { const n = (this.form.value.party_size || 1) + 1; this.form.patchValue({ party_size: n }); }
@@ -227,6 +231,11 @@ export class NewReservationPage implements OnDestroy {
 
   async submit() {
     if (this.form.invalid) { this.form.markAllAsTouched(); return; }
+
+    // 🔠 Normalizza nome/cognome PRIMA di inviare (anche se l’utente non esce dal campo)
+    this.upperOnBlur('customer_last');
+    this.upperOnBlur('customer_first');
+
     this.loading.set(true);
     try {
       const startIsoLocal = this.form.value.start_at as string; // es. 2025-10-26T20:00
@@ -247,7 +256,7 @@ export class NewReservationPage implements OnDestroy {
       await (await this.toast.create({ message: 'Prenotazione creata ✅', duration: 1400 })).present();
 
       // === Notifiche anche su PENDING ===
-      if (created?.status === 'pending') {
+      if ((created as any)?.status === 'pending') {
         this.mail.sendReservationPendingAdmin(created as Reservation).subscribe(r => {
           console.log('📧 [Mail] admin pending OK?', r.ok);
         });

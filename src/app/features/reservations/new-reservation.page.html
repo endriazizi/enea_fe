@@ -1,8 +1,7 @@
 <ion-content class="ion-padding page-resv">
-
   <form class="compact" [formGroup]="form" (ngSubmit)="onSubmit()">
 
-    <!-- ===== Sezione 0: Cerca contatto (Google) - IN ALTO ===== -->
+    <!-- ===== Sezione 0: Cerca contatto (Google) ===== -->
     <ion-list inset="true" class="mt-6">
       <ion-item lines="full">
         <ion-label position="stacked">Cerca in Google Contacts…</ion-label>
@@ -17,10 +16,12 @@
         </app-gcontacts-autocomplete>
       </ion-item>
 
-      <!-- Banner + CTA: appare finché non c'è consenso/token -->
-      <ion-item lines="none" *ngIf="gcNeedsConsent()" style="padding-top:6px;">
-        <ion-note slot="start" color="warning">Accesso necessario per leggere i contatti Google.</ion-note>
-        <ion-button slot="end" size="small" fill="outline" (click)="onGcConnectClick()">
+      <!-- Banner consenso read -->
+      <ion-item *ngIf="gcNeedsRead()" lines="none" class="google-warning">
+        <ion-note color="warning">
+          Accesso necessario per leggere i contatti Google.
+        </ion-note>
+        <ion-button slot="end" size="small" (click)="onGoogleConnect()" class="btn-google-connect">
           <ion-icon name="logo-google" slot="start"></ion-icon>
           Connetti Google
         </ion-button>
@@ -35,10 +36,8 @@
           formControlName="customer_last"
           class="u-upper-visual"
           (ionBlur)="upperOnBlur('customer_last')"
-          autocomplete="family-name"
-          inputmode="text"
-          spellcheck="false"
-          autocorrect="off">
+          autocomplete="family-name" inputmode="text"
+          spellcheck="false" autocorrect="off">
         </ion-input>
       </ion-item>
 
@@ -48,10 +47,8 @@
           formControlName="customer_first"
           class="u-upper-visual"
           (ionBlur)="upperOnBlur('customer_first')"
-          autocomplete="given-name"
-          inputmode="text"
-          spellcheck="false"
-          autocorrect="off">
+          autocomplete="given-name" inputmode="text"
+          spellcheck="false" autocorrect="off">
         </ion-input>
       </ion-item>
 
@@ -70,6 +67,15 @@
           Inserisci un’email valida (opzionale).
         </ion-note>
       </ion-item>
+
+      <!-- CTA salva contatto in Google -->
+      <div class="px-8 py-8">
+        <ion-button expand="block" fill="outline" size="default"
+                    (click)="onGoogleSave()" [disabled]="gcSaving()">
+          <ion-icon name="logo-google" slot="start"></ion-icon>
+          {{ gcSaving() ? 'Salvataggio…' : 'Salva in Google' }}
+        </ion-button>
+      </div>
     </ion-list>
 
     <!-- ===== Sezione 2: Coperti ===== -->
@@ -105,12 +111,10 @@
         </app-date-quick>
       </ion-item>
 
-      <!-- PRANZO -->
       <div *ngIf="lunchSlots.length" class="px-12 py-8">
         <div class="sec-title">Pranzo</div>
         <div class="btn-grid">
-          <ion-button
-            *ngFor="let t of lunchSlots"
+          <ion-button *ngFor="let t of lunchSlots"
             [fill]="selectedTime() === t ? 'solid' : 'outline'"
             [disabled]="isSlotDisabled(selectedDateISO(), t)"
             (click)="onSelectTime(t)">
@@ -119,12 +123,10 @@
         </div>
       </div>
 
-      <!-- CENA -->
       <div *ngIf="dinnerSlots.length" class="px-12 pb-12">
         <div class="sec-title">Cena</div>
         <div class="btn-grid">
-          <ion-button
-            *ngFor="let t of dinnerSlots"
+          <ion-button *ngFor="let t of dinnerSlots"
             [fill]="selectedTime() === t ? 'solid' : 'outline'"
             [disabled]="isSlotDisabled(selectedDateISO(), t)"
             (click)="onSelectTime(t)">
@@ -139,17 +141,12 @@
         </ion-note>
       </ion-item>
 
-      <!-- Toggle calendario avanzato -->
       <div class="px-12 pt-6">
         <ion-button fill="clear" size="small" (click)="toggleAdvanced()">
           {{ showAdvanced() ? 'Chiudi calendario' : 'Scegli da calendario' }}
         </ion-button>
         <div *ngIf="showAdvanced()">
-          <ion-datetime
-            presentation="date-time"
-            [value]="advancedValue()"
-            (ionChange)="onAdvancedPick($event)">
-          </ion-datetime>
+          <ion-datetime presentation="date-time" [value]="advancedValue()" (ionChange)="onAdvancedPick($event)"></ion-datetime>
         </div>
       </div>
 
@@ -164,23 +161,14 @@
     <ion-list inset="true">
       <ion-item lines="full">
         <ion-label position="stacked">Sala</ion-label>
-        <ion-select
-          formControlName="room_id"
-          interface="popover"
-          placeholder="Seleziona sala"
-          (ionChange)="onRoomChange()">
-          <ion-select-option *ngFor="let r of rooms()" [value]="r.id">
-            {{ r.name }}
-          </ion-select-option>
+        <ion-select formControlName="room_id" interface="popover" placeholder="Seleziona sala" (ionChange)="onRoomChange()">
+          <ion-select-option *ngFor="let r of rooms()" [value]="r.id">{{ r.name }}</ion-select-option>
         </ion-select>
       </ion-item>
 
       <ion-item lines="full">
         <ion-label position="stacked">Tavolo</ion-label>
-        <ion-select
-          formControlName="table_id"
-          interface="popover"
-          placeholder="Seleziona tavolo">
+        <ion-select formControlName="table_id" interface="popover" placeholder="Seleziona tavolo">
           <ion-select-option *ngFor="let t of tables()" [value]="t.id">
             Tavolo {{ t.table_number || t.label || t.id }} ({{ t.capacity || '?' }})
           </ion-select-option>
@@ -192,16 +180,12 @@
     <ion-list inset="true">
       <ion-item lines="full">
         <ion-label position="stacked">Note</ion-label>
-        <ion-textarea
-          formControlName="notes"
-          autoGrow="true"
-          enterkeyhint="done"
-          placeholder="Es. intolleranze, preferenza tavolo, segnalazioni…">
-        </ion-textarea>
+        <ion-textarea formControlName="notes" autoGrow="true" enterkeyhint="done"
+          placeholder="Es. intolleranze, preferenza tavolo, segnalazioni…"></ion-textarea>
       </ion-item>
     </ion-list>
 
-    <!-- CTA -->
+    <!-- CTA prenotazione -->
     <div class="px-8 py-12">
       <ion-button expand="block" size="large" type="submit" [disabled]="loading() || form.invalid">
         {{ loading() ? 'Creazione…' : 'Crea prenotazione' }}
@@ -209,7 +193,7 @@
     </div>
   </form>
 
-  <!-- === FAB (mobile) ====================================================== -->
+  <!-- FAB mobile -->
   <ion-fab slot="fixed" horizontal="end" vertical="bottom" class="ion-hide-md-up fab-resv">
     <ion-fab-button title="Azioni">
       <ion-icon name="ellipsis-vertical"></ion-icon>
@@ -223,5 +207,4 @@
       </ion-fab-button>
     </ion-fab-list>
   </ion-fab>
-
 </ion-content>

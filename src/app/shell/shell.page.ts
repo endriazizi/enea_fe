@@ -56,6 +56,9 @@ export class ShellPage implements OnInit, OnDestroy {
     { label: 'Lista prenotazioni',    path: '/reservations', icon: 'list',       badge: true },
     { label: 'Nuova prenotazione',    path: '/reservations/new', icon: 'add-circle' },
 
+     // 👇 Nuova voce Tavoli
+    { label: 'Tavoli',                path: '/tables',       icon: 'grid' },
+
     // Ordini — tua pagina esistente
     { label: 'Ordini (live)',         path: '/orders',       icon: 'time-outline' },
     // 👇 NUOVA VOCE — nuova pagina "orders-list-live.page"

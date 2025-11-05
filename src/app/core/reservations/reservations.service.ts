@@ -1,4 +1,3 @@
-// src/app/core/reservations/reservations.service.ts
 // ============================================================================
 // Service FE - Prenotazioni
 // - Aggiunta hard delete: remove(id,{force?,notify?})
@@ -11,7 +10,8 @@
 
 import { Injectable, inject, Inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable, map, catchError } from 'rxjs';
+// 👇 FIX: aggiunti switchMap, forkJoin, of (mantengo tuo stile: tutti da 'rxjs')
+import { Observable, map, catchError, switchMap, forkJoin, of } from 'rxjs';
 import { API_URL } from '../tokens';
 
 export type ReservationStatus = 'pending' | 'accepted' | 'rejected' | 'cancelled';
@@ -103,7 +103,7 @@ export class ReservationsApi {
     capacity: t.capacity ?? (t.seats != null ? Number(t.seats) : null),
   });
 
-  // -------------------- CRUD ------------------------------------------------
+  // -------------------- CRUD -------------------------------------------------
 
   list(filter: ListFilter): Observable<Reservation[]> {
     let params = new HttpParams();
@@ -218,5 +218,27 @@ export class ReservationsApi {
     return this.http.get<CountByStatusRes>(`${this.baseUrl}/reservations/support/count-by-status`, { params: p })
       // opzionale fallback top-level (se in qualche env è /support/count-by-status)
       .pipe(catchError(() => this.http.get<CountByStatusRes>(`${this.baseUrl}/support/count-by-status`, { params: p })));
+  }
+
+  // === TAVOLI: helper per ottenere "tutti" i tavoli con room_name =============
+  listAllTablesAcrossRooms(): Observable<(Table & { room_name?: string })[]> {
+    return this.listRooms().pipe(
+      switchMap((rooms: Room[] | null) => {
+        if (!rooms || rooms.length === 0) {
+          return of([] as (Table & { room_name?: string })[]);
+        }
+        // per ogni sala, chiamo l'API esistente listTablesByRoom
+        const calls = rooms.map((r: Room) =>
+          this.listTablesByRoom(r.id).pipe(
+            map((rows: Table[] | null) =>
+              (rows || []).map(t => ({ ...t, room_name: r.name }))
+            )
+          )
+        );
+        return forkJoin(calls).pipe(
+          map((chunks: Array<Array<Table & { room_name?: string }>>) => chunks.flat())
+        );
+      })
+    );
   }
 }

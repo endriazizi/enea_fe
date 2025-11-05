@@ -1,6 +1,11 @@
 import { Component, computed, inject, signal, OnInit, OnDestroy } from '@angular/core';
 import { NgFor, NgIf, DatePipe, AsyncPipe } from '@angular/common';
 
+// RxJS helpers usati dal nuovo helper
+import { forkJoin, of } from 'rxjs';
+import { switchMap } from 'rxjs/operators';
+// (se non l’avevi già) import { map } from 'rxjs/operators';
+
 import {
   IonHeader, IonToolbar, IonTitle, IonContent, IonList, IonItem, IonLabel,
   IonBadge, IonButtons, IonButton, IonIcon, IonRefresher, IonRefresherContent,

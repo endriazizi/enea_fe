@@ -1,0 +1,96 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-title>Tavoli (Oggi)</ion-title>
+    <ion-buttons slot="end">
+      <ion-button routerLink="/reservations/new" routerDirection="forward">Nuova</ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="ion-padding page-tables">
+
+  <!-- Quick day picker -->
+  <app-date-quick
+    [title]="'Giorno rapido'"
+    [showTodayLine]="false"
+    [days]="7"
+    [selected]="selectedDayForPicker()"
+    (selectedChange)="onQuickFilterDay($event)">
+  </app-date-quick>
+
+  <!-- Filtri -->
+  <div class="filters">
+    <ion-segment [value]="filterState()" (ionChange)="onFilterChange($event)">
+      <ion-segment-button value="all">Tutti</ion-segment-button>
+      <ion-segment-button value="free">Liberi</ion-segment-button>
+      <ion-segment-button value="upcoming">In arrivo</ion-segment-button>
+      <ion-segment-button value="busy">Occupati</ion-segment-button>
+      <ion-segment-button value="cleaning">Pulizia</ion-segment-button>
+    </ion-segment>
+
+    <div class="room-filter">
+      <ion-segment [value]="filterRoomId()" (ionChange)="onRoomChange($event)">
+        <ion-segment-button *ngFor="let r of roomOptions()" [value]="r.id">{{ r.name }}</ion-segment-button>
+      </ion-segment>
+    </div>
+
+    <ion-searchbar placeholder="Cerca per nome, tavolo…" (ionInput)="onSearchChange($event)"></ion-searchbar>
+  </div>
+
+  <div class="loading" *ngIf="loading()">
+    <ion-spinner></ion-spinner>
+  </div>
+
+  <ion-grid *ngIf="!loading()">
+    <ion-row>
+      <ion-col size="12" size-sm="6" size-md="4" size-lg="3"
+               *ngFor="let t of tablesFilteredSig(); trackBy: trackByTableId">
+
+        <ion-card [class.free]="t.state==='free'"
+                  [class.upcoming]="t.state==='upcoming'"
+                  [class.busy]="t.state==='busy'"
+                  [class.cleaning]="t.state==='cleaning'"
+                  (click)="openActions(t)">
+
+          <ion-card-header>
+            <ion-card-title>
+              TAV. {{t.number}} • {{t.room_name}}
+              <ion-badge *ngIf="t.state==='free'">LIBERO</ion-badge>
+              <ion-badge color="warning" *ngIf="t.state==='upcoming'">IN ARRIVO</ion-badge>
+              <ion-badge color="danger" *ngIf="t.state==='busy'">OCCUPATO</ion-badge>
+              <ion-badge color="primary" *ngIf="t.state==='cleaning'">PULIZIA</ion-badge>
+            </ion-card-title>
+
+            <ion-note *ngIf="t.resNow">
+              🕒 {{ t.resNow.start_at | date:'HH:mm' }}–{{ t.resNow.end_at | date:'HH:mm' }}
+              • {{ t.resNow.customer_name }} • 👥 {{ t.resNow.covers }}
+              <span *ngIf="t.resNow.kids"> • 👶 {{ t.resNow.kids }}</span>
+            </ion-note>
+
+            <ion-note *ngIf="!t.resNow && t.resNext">
+              ⏭ {{ t.resNext.start_at | date:'HH:mm' }}–{{ t.resNext.end_at | date:'HH:mm' }}
+              • {{ t.resNext.customer_name }} • 👥 {{ t.resNext.covers }}
+            </ion-note>
+
+            <ion-note *ngIf="t.state==='free' && !t.resNext">Capienza: {{ t.capacity }}</ion-note>
+          </ion-card-header>
+
+          <!-- 👇 FIX: optional chaining per evitare 'possibly undefined' -->
+          <ion-card-content *ngIf="t.resNow?.notes">
+            🏷️ {{ t.resNow?.notes }}
+          </ion-card-content>
+
+          <ion-item lines="none" class="actions">
+            <ion-button size="small" fill="outline" (click)="openDetails(t); $event.stopPropagation()">Dettagli</ion-button>
+            <ion-button size="small" *ngIf="t.state==='upcoming'" (click)="checkIn(t); $event.stopPropagation()">Check-in</ion-button>
+            <ion-button size="small" *ngIf="t.state==='busy'" (click)="printKitchen(t); $event.stopPropagation()">Stampa</ion-button>
+            <ion-button size="small" *ngIf="t.state==='free'" color="success" (click)="newReservation(t); $event.stopPropagation()">Nuova</ion-button>
+          </ion-item>
+
+        </ion-card>
+
+      </ion-col>
+    </ion-row>
+  </ion-grid>
+
+</ion-content>

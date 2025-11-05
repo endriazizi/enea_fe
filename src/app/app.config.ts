@@ -60,6 +60,14 @@ const routes: Routes = [
       { path: '', pathMatch: 'full', redirectTo: 'diagnostics' },
       { path: 'diagnostics', component: DiagnosticsPage },
 
+      
+      // 👉 NUOVA ROTTA
+      {
+        path: 'tables',
+        loadComponent: () => import('./features/tables/tables-list.page').then(m => pick(m, 'TablesListPage')),
+        canActivate: [authGuard]
+      },
+
       // Prenotazioni (immutato)
       {
         path: 'reservations',

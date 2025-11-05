@@ -3,7 +3,7 @@
 .filters { display: grid; gap: 8px; margin-bottom: 10px; }
 .room-filter ion-segment { margin-top: 4px; }
 
-ion-card { --padding-start: 12px; --padding-end: 12px; }
+ion-card { --padding-start: 12px; --padding-end: 12px; cursor: pointer; } /* 🆕 pointer */
 ion-card.free      { border-left: 6px solid var(--ion-color-success); }
 ion-card.upcoming  { border-left: 6px solid var(--ion-color-warning); }
 ion-card.busy      { border-left: 6px solid var(--ion-color-danger); }

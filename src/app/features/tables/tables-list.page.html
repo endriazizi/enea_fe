@@ -75,7 +75,6 @@
             <ion-note *ngIf="t.state==='free' && !t.resNext">Capienza: {{ t.capacity }}</ion-note>
           </ion-card-header>
 
-          <!-- 👇 FIX: optional chaining per evitare 'possibly undefined' -->
           <ion-card-content *ngIf="t.resNow?.notes">
             🏷️ {{ t.resNow?.notes }}
           </ion-card-content>

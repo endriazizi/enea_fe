@@ -1,0 +1,94 @@
+<ion-header>
+  <ion-toolbar>
+    <ion-title>Sposta prenotazione</ion-title>
+    <ion-buttons slot="end">
+      <ion-button (click)="onCancel()">Chiudi</ion-button>
+    </ion-buttons>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="ion-padding modal-move">
+  <!-- Info prenotazione corrente -->
+  <div class="slot">
+    <ion-badge color="dark">ID #{{ reservation?.id }}</ion-badge>
+    <ion-note>
+      🕒 {{ reservation?.start_at | date:'HH:mm' }}–{{ reservation?.end_at | date:'HH:mm' }}
+      • 👥 {{ reservation?.covers || 0 }}
+    </ion-note>
+  </div>
+
+  <!-- Filtri -->
+  <div class="filters">
+    <ion-searchbar placeholder="Cerca tavolo/sala…" (ionInput)="search.set(($event.detail?.value||''))"></ion-searchbar>
+
+    <div class="row">
+      <ion-label>Capienza minima: {{ minCapacity() }}</ion-label>
+      <!-- FIX: niente Number(...) in template → uso unario '+' -->
+      <ion-range
+        min="0" max="20" step="1"
+        [value]="minCapacity()"
+        (ionChange)="minCapacity.set(+$event.detail.value || 0)">
+      </ion-range>
+    </div>
+
+    <div class="row">
+      <ion-label>Sala</ion-label>
+      <!-- FIX: idem, converto a numero con '+' -->
+      <ion-select
+        [value]="roomFilter()"
+        (ionChange)="roomFilter.set(+$event.detail.value || 0)">
+        <ion-select-option [value]="0">Tutte</ion-select-option>
+        <ion-select-option *ngFor="let t of tables; trackBy: trackById" [value]="t.room_id">
+          {{ t.room_name || ('Sala ' + t.room_id) }}
+        </ion-select-option>
+      </ion-select>
+    </div>
+  </div>
+
+  <!-- Sezione SUGGERITI -->
+  <ion-list *ngIf="suggested().length">
+    <ion-item lines="full">
+      <ion-label><strong>Suggeriti</strong> (liberi nella fascia & capienza ≥ {{ minCapacity() }})</ion-label>
+    </ion-item>
+
+    <ion-item
+      button
+      *ngFor="let t of suggested(); trackBy: trackById"
+      [detail]="false"
+      (click)="onPick(t.id)"
+      [class.selected]="selectedTableId()===t.id">
+      <ion-label>
+        <div class="row1">Tav. {{ t.table_number || t.label || t.id }} • {{ t.room_name }}</div>
+        <div class="row2">Capienza: {{ t.capacity || '?' }}</div>
+      </ion-label>
+      <ion-badge color="success" slot="end">LIBERO</ion-badge>
+    </ion-item>
+  </ion-list>
+
+  <!-- Sezione ALTRI LIBERI -->
+  <ion-list *ngIf="others().length">
+    <ion-item lines="full">
+      <ion-label><strong>Altri liberi</strong></ion-label>
+    </ion-item>
+
+    <ion-item
+      button
+      *ngFor="let t of others(); trackBy: trackById"
+      [detail]="false"
+      (click)="onPick(t.id)"
+      [class.selected]="selectedTableId()===t.id">
+      <ion-label>
+        <div class="row1">Tav. {{ t.table_number || t.label || t.id }} • {{ t.room_name }}</div>
+        <div class="row2">Capienza: {{ t.capacity || '?' }}</div>
+      </ion-label>
+      <ion-badge color="medium" slot="end">LIBERO</ion-badge>
+    </ion-item>
+  </ion-list>
+
+  <!-- CTA -->
+  <div class="cta">
+    <ion-button expand="block" [disabled]="!selectedTableId()" (click)="onConfirm()">
+      Conferma spostamento
+    </ion-button>
+  </div>
+</ion-content>

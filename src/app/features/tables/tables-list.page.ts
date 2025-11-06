@@ -4,9 +4,8 @@
 // - Segment per SALA, ricerca testuale, Quick day picker (riuso app-date-quick)
 // - Signals + commenti lunghi + log con emoji, nel tuo stile
 // - 🆕 Action Sheet su tap card: Dettagli / Check-in / Sposta / Stampa
-//    • Pulsanti dinamici in base allo stato corrente del tavolo
-//    • Niente cambio logiche esistenti: chiama i tuoi metodi openDetails/checkIn/printKitchen/newReservation
-//    • “Sposta” per ora mostra un toast (placeholder), pronto a collegare un modal/flow
+// - 🛠️ FIX: provider espliciti per overlay controller (Modal/ActionSheet/Toast)
+//           per risolvere NG0201: No provider for _ModalController
 // ============================================================================
 
 import { Component, effect, inject, signal, computed } from '@angular/core';
@@ -22,8 +21,10 @@ import { Router, RouterLink } from '@angular/router';
 import { ReservationsApi, Room, Table, Reservation } from '../../core/reservations/reservations.service';
 import { DateQuickComponent } from '../reservations/_components/ui/date-quick/date-quick.component';
 
-// 🆕: servizi runtime (non componenti) per sheet/toast
-import { ActionSheetController, ToastController } from '@ionic/angular';
+// 🆕 Controller runtime (overlay) + toast
+import { ActionSheetController, ToastController, ModalController } from '@ionic/angular';
+// 🆕 Modal "Sposta"
+import { MoveReservationModalComponent } from '../reservations/_components/move-reservation.modal/move-reservation.modal';
 
 type TableState = 'free'|'upcoming'|'busy'|'cleaning';
 
@@ -50,16 +51,19 @@ export type TableCard = {
     IonCardTitle, IonCardContent, IonBadge, IonItem, IonNote,
     IonSegment, IonSegmentButton, IonSearchbar, IonSpinner,
     DateQuickComponent
-  ]
+  ],
+  // 🛠️ provider overlay qui per evitare NG0201 (_ModalController) su lazy page
+  providers: [ModalController, ActionSheetController, ToastController],
 })
 export class TablesListPage {
   // === DI ===========================================================
   private api    = inject(ReservationsApi);
   private router = inject(Router);
 
-  // 🆕 Controller runtime per sheet/toast (stile Ionic)
+  // Overlay controllers
   private actionSheet = inject(ActionSheetController);
   private toast       = inject(ToastController);
+  private modal       = inject(ModalController);
 
   // === Stato UI =====================================================
   loading      = signal(true);
@@ -151,7 +155,7 @@ export class TablesListPage {
   onRoomChange(ev: CustomEvent)   { this.filterRoomId.set(Number((ev.detail as any)?.value || 0)); }
   onSearchChange(ev: CustomEvent) { this.filterText.set(String((ev.detail as any)?.value || '')); }
 
-  // === Azioni "di base" già presenti (logiche esistenti, NON toccate) ========
+  // === Azioni base (immutato) ======================================
   openDetails(t: TableCard)   { if (t.resNow) this.router.navigate(['/reservations', t.resNow.id, 'edit']); }
   checkIn(t: TableCard)       { console.log('✅ [TablesList] check-in', t); /* TODO: integrare flow check-in */ }
   printKitchen(t: TableCard)  { console.log('🖨️ [TablesList] print kitchen for table', t.id); /* TODO: integrare stampa */ }
@@ -160,85 +164,57 @@ export class TablesListPage {
     this.router.navigate(['/reservations/new'], extras);
   }
 
-  // 🆕 Placeholder "Sposta": mostra un toast; pronto per aprire un modal/flow
+  // === Action Sheet + Modal "Sposta" =================================
   private async moveReservation(t: TableCard) {
-    console.log('🔀 [TablesList] sposta prenotazione — tavolo', t);
-    const toast = await this.toast.create({
-      message: 'Sposta: pronto per collegare un modal di selezione tavolo ✅',
-      duration: 1500
-    });
-    await toast.present();
+    try {
+      const ref = t.resNow ?? t.resNext;
+      if (!ref) return;
+
+      const modal = await this.modal.create({
+        component: MoveReservationModalComponent,
+        componentProps: {
+          currentTableId: t.id,
+          reservation: { id: ref.id, start_at: ref.start_at, end_at: ref.end_at, covers: ref.covers, room_id: t.room_id },
+          tables: this.tablesRawSig(),
+          reservations: this.reservationsTodaySig()
+        },
+        cssClass: 'modal--move-reservation'
+      });
+      await modal.present();
+      const res = await modal.onDidDismiss<{ ok: boolean; table_id?: number }>();
+      if (!res?.data?.ok || !res.data.table_id) return;
+
+      await this.api.update(ref.id, { table_id: res.data.table_id }).toPromise();
+      (await this.toast.create({ message: 'Prenotazione spostata ✅', duration: 1400 })).present();
+      await this.reload();
+    } catch (e) {
+      console.warn('⚠️ [TablesList] moveReservation KO', e);
+      (await this.toast.create({ message: 'Spostamento non riuscito', color: 'warning', duration: 1600 })).present();
+    }
   }
 
-  // === Action Sheet su tap card =============================================
   async openActions(t: TableCard) {
     try {
       const isFree = t.state === 'free';
       const isUpcoming = t.state === 'upcoming';
       const isBusy = t.state === 'busy';
 
-      // Costruisco dinamicamente i pulsanti mantenendo le etichette chiare
       const buttons: any[] = [];
+      if (!isFree) buttons.push({ text: 'Dettagli', icon: 'information-circle-outline', handler: () => this.openDetails(t) });
+      if (isUpcoming) buttons.push({ text: 'Check-in', icon: 'log-in-outline', handler: () => this.checkIn(t) });
+      if (t.resNow || t.resNext) buttons.push({ text: 'Sposta', icon: 'swap-horizontal-outline', handler: () => this.moveReservation(t) });
+      if (isBusy) buttons.push({ text: 'Stampa', icon: 'print-outline', handler: () => this.printKitchen(t) });
+      if (isFree) buttons.push({ text: 'Nuova prenotazione', icon: 'add-circle-outline', handler: () => this.newReservation(t) });
+      buttons.push({ text: 'Chiudi', role: 'cancel', icon: 'close' });
 
-      if (!isFree) {
-        buttons.push({
-          text: 'Dettagli',
-          icon: 'information-circle-outline',
-          handler: () => this.openDetails(t)
-        });
-      }
-
-      if (isUpcoming) {
-        buttons.push({
-          text: 'Check-in',
-          icon: 'log-in-outline',
-          handler: () => this.checkIn(t)
-        });
-      }
-
-      // Sposta sempre visibile se ho una prenotazione di riferimento (now/next)
-      if (t.resNow || t.resNext) {
-        buttons.push({
-          text: 'Sposta',
-          icon: 'swap-horizontal-outline',
-          handler: () => this.moveReservation(t)
-        });
-      }
-
-      if (isBusy) {
-        buttons.push({
-          text: 'Stampa',
-          icon: 'print-outline',
-          handler: () => this.printKitchen(t)
-        });
-      }
-
-      if (isFree) {
-        buttons.push({
-          text: 'Nuova prenotazione',
-          icon: 'add-circle-outline',
-          handler: () => this.newReservation(t)
-        });
-      }
-
-      // Pulsante chiudi (ruolo 'cancel' = chiude sempre lo sheet)
-      buttons.push({
-        text: 'Chiudi',
-        role: 'cancel',
-        icon: 'close'
-      });
-
-      const sheet = await this.actionSheet.create({
-        header: `Tav. ${t.number} • ${t.room_name}`,
-        buttons
-      });
+      const sheet = await this.actionSheet.create({ header: `Tav. ${t.number} • ${t.room_name}`, buttons });
       await sheet.present();
     } catch (e) {
       console.warn('⚠️ [TablesList] openActions KO', e);
     }
   }
 
-  // === Altri util ===================================================
+  // === Util =========================================================
   trackByTableId = (_: number, t: TableCard) => t.id;
 
   private todayISO(): string {

@@ -1,16 +1,14 @@
 // ============================================================================
 // Service FE - Prenotazioni
-// - Aggiunta hard delete: remove(id,{force?,notify?})
+// - Hard delete: remove(id,{force?,notify?})
 // - Compat: updateStatus(id, action, reason?) e printDaily({date,status})
-// - Supporto lookup: listRooms(), listTablesByRoom(roomId)
-// - FIX typing: Table.label / Table.capacity, Reservation.table_number / table_name
-// - Tracciamento (opz.): created_by / updated_by
-// - 🔧 CHANGED: endpoint fallback (/reservations/* -> /rooms, /tables/by-room) + unwrap di updateStatus
+// - Lookup: listRooms(), listTablesByRoom(roomId), listAllTablesAcrossRooms()
+// - 🆕 moveReservationTable(id, table_id): PUT /reservations/:id/table
+// - Fix RxJS imports per listAllTablesAcrossRooms
 // ============================================================================
 
 import { Injectable, inject, Inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-// 👇 FIX: aggiunti switchMap, forkJoin, of (mantengo tuo stile: tutti da 'rxjs')
 import { Observable, map, catchError, switchMap, forkJoin, of } from 'rxjs';
 import { API_URL } from '../tokens';
 
@@ -87,7 +85,6 @@ export interface StatusChangeBody {
   whatsapp?: boolean;
 }
 
-// DTO comodo per il wizard pubblico (facoltativo; è un alias di Partial<Reservation>)
 export type CreateReservationPayload = Partial<Reservation>;
 
 @Injectable({ providedIn: 'root' })
@@ -136,12 +133,10 @@ export class ReservationsApi {
 
   // -------------------- Stato & Notifiche -----------------------------------
 
-  // Compat: nuovo + legacy
   updateStatus(id: number, body: StatusChangeBody): Observable<Reservation>;
   updateStatus(id: number, action: StatusAction, reason?: string): Observable<Reservation>;
   updateStatus(id: number, a: any, b?: any): Observable<Reservation> {
     const payload = typeof a === 'string' ? { action: a, reason: b } : a;
-    // alcuni BE ritornano { ok, reservation }, altri l'oggetto direttamente → unwrap
     return this.http
       .put<any>(`${this.baseUrl}/reservations/${id}/status`, payload)
       .pipe(map(res => (res?.reservation ?? res) as Reservation));
@@ -159,7 +154,6 @@ export class ReservationsApi {
 
   // -------------------- Stampe ----------------------------------------------
 
-  /** Compat: printDaily({date,status}) o printDaily(date, status) */
   printDaily(arg1: any, maybeStatus?: ReservationStatus | 'all') {
     const payload = typeof arg1 === 'string'
       ? { date: arg1, status: (maybeStatus || 'all') }
@@ -181,14 +175,12 @@ export class ReservationsApi {
   // -------------------- Supporto UI / Lookup --------------------------------
 
   listRooms(): Observable<Room[]> {
-    // Endpoints compat: prima provo /rooms, poi /rooms
     const primary = this.http.get<Room[]>(`${this.baseUrl}/rooms`);
     const fallback = () => this.http.get<Room[]>(`${this.baseUrl}/rooms`);
     return primary.pipe(catchError(() => fallback()));
   }
 
   listTablesByRoom(roomId: number): Observable<Table[]> {
-    // Endpoints compat: /reservations/support/tables/by-room/:id → fallback /tables/by-room/:id
     const primary = this.http.get<Table[]>(`${this.baseUrl}/reservations/support/tables/by-room/${roomId}`);
     const fallback = () => this.http.get<Table[]>(`${this.baseUrl}/tables/by-room/${roomId}`);
     return primary.pipe(
@@ -197,7 +189,6 @@ export class ReservationsApi {
     );
   }
 
-  // Alias se altrove già usati
   rooms(): Observable<Room[]> { return this.listRooms(); }
 
   tables(roomId?: number): Observable<Table[]> {
@@ -214,31 +205,26 @@ export class ReservationsApi {
 
   countByStatus(params: { from: string; to: string }): Observable<CountByStatusRes> {
     const p = new HttpParams().set('from', params.from).set('to', params.to);
-    // mantengo l'endpoint che già usi sul BE per compat
     return this.http.get<CountByStatusRes>(`${this.baseUrl}/reservations/support/count-by-status`, { params: p })
-      // opzionale fallback top-level (se in qualche env è /support/count-by-status)
       .pipe(catchError(() => this.http.get<CountByStatusRes>(`${this.baseUrl}/support/count-by-status`, { params: p })));
   }
 
-  // === TAVOLI: helper per ottenere "tutti" i tavoli con room_name =============
+  // === TAVOLI: ottiene "tutti" i tavoli con room_name ========================
   listAllTablesAcrossRooms(): Observable<(Table & { room_name?: string })[]> {
     return this.listRooms().pipe(
-      switchMap((rooms: Room[] | null) => {
-        if (!rooms || rooms.length === 0) {
-          return of([] as (Table & { room_name?: string })[]);
-        }
-        // per ogni sala, chiamo l'API esistente listTablesByRoom
-        const calls = rooms.map((r: Room) =>
-          this.listTablesByRoom(r.id).pipe(
-            map((rows: Table[] | null) =>
-              (rows || []).map(t => ({ ...t, room_name: r.name }))
-            )
-          )
-        );
-        return forkJoin(calls).pipe(
-          map((chunks: Array<Array<Table & { room_name?: string }>>) => chunks.flat())
-        );
+      switchMap((rooms) => {
+        if (!rooms || !rooms.length) return of([]);
+        const calls = rooms.map(r => this.listTablesByRoom(r.id).pipe(
+          map(rows => (rows || []).map(t => ({ ...t, room_name: r.name })))
+        ));
+        return forkJoin(calls).pipe(map((chunks: (Table & { room_name?: string })[][]) => chunks.flat()));
       })
     );
+  }
+
+  // === 🆕 Sposta prenotazione su un altro tavolo =============================
+  /** PUT /reservations/:id/table  { table_id } */
+  moveReservationTable(id: number, table_id: number): Observable<{ ok: boolean }> {
+    return this.http.put<{ ok: boolean }>(`${this.baseUrl}/reservations/${id}/table`, { table_id });
   }
 }

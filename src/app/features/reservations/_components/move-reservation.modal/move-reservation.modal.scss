@@ -1,0 +1,9 @@
+.modal-move {
+  .slot { display: grid; gap: 4px; margin-bottom: 10px; }
+  .filters { display: grid; gap: 8px; margin-bottom: 8px; }
+  .filters .row { display: grid; gap: 6px; }
+  ion-item.selected { --background: rgba(56,128,255,.10); }
+  .row1 { font-weight: 600; }
+  .row2 { opacity: .9; font-size: .9rem; }
+  .cta { margin-top: 12px; }
+}

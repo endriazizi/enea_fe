@@ -9,7 +9,11 @@ import {
   pulseOutline,
   closeCircleOutline,
   informationCircle,
-  informationCircleOutline
+  informationCircleOutline,
+  gridOutline,
+  addCircleOutline,
+  logInOutline,
+  swapHorizontalOutline
 } from 'ionicons/icons';
 
 export function registerAppIcons() {
@@ -38,6 +42,13 @@ export function registerAppIcons() {
     'checkmark-circle-outline': checkmarkOutline,
     'close-circle-outline': closeCircleOutline,
     'information-circle-outline':informationCircleOutline,
-    'trash-bin-outline': trashOutline
+    'trash-bin-outline': trashOutline,
+    'grid': gridOutline,
+    'add-circle-outline':addCircleOutline,
+    'close':closeOutline,
+    'log-in-outline': logInOutline,
+    'swap-horizontal-outline': swapHorizontalOutline,
+    
+
   });
 }

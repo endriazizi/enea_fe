@@ -1,5 +1,6 @@
 /* src/app/features/orders/order-builder.page.scss */
 /* Mantengo le tue classi e aggiungo solo il necessario */
+
 .menu-card { border-radius: 16px; box-shadow: 0 8px 16px rgba(0,0,0,.06); }
 .menu-card .price { font-weight: 700; margin-bottom: 8px; }
 .menu-card .actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
@@ -28,3 +29,11 @@
 .chip-flag.aggiungi { color: #0a7a3e; border-color: #0a7a3e; }
 
 .px { margin-left: 6px; opacity: .85; }
+
+/* === Filtri/Categorie — stile Tavoli (aggiunto, nessuna logica cambiata) === */
+.filters { display: grid; gap: 8px; margin: 8px 12px 10px; }
+.category-filter ion-segment { margin-top: 4px; }
+
+/* Lista inset con look coerente al resto della PWA */
+ion-list[inset] { border-radius: 12px; overflow: hidden; }
+ion-item { --padding-start: 12px; --inner-padding-end: 12px; }

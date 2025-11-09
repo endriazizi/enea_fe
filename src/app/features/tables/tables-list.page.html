@@ -37,6 +37,31 @@
     <ion-searchbar placeholder="Cerca per nome, tavolo…" (ionInput)="onSearchChange($event)"></ion-searchbar>
   </div>
 
+  <!-- KPI (colpo d'occhio) -->
+  <div class="kpi-grid" *ngIf="!loading()">
+    <div class="kpi">
+      <div class="kpi-title">👥 Prenotati oggi</div>
+      <div class="kpi-value">{{ kpiPeopleTotal() }}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-title">✅ Check-in ora</div>
+      <div class="kpi-value">{{ kpiPeopleCheckIn() }}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-title">🔴 Occupati</div>
+      <div class="kpi-value">{{ kpiTablesBusy() }}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-title">🟢 Liberi</div>
+      <div class="kpi-value">{{ kpiTablesFree() }}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-title">🪑 Posti liberi</div>
+      <div class="kpi-value">{{ kpiFreeSeatsTotal() }}</div>
+      <ion-note *ngIf="kpiFreeSeatsDist()" class="kpi-note">{{ kpiFreeSeatsDist() }}</ion-note>
+    </div>
+  </div>
+
   <div class="loading" *ngIf="loading()">
     <ion-spinner></ion-spinner>
   </div>
@@ -58,7 +83,9 @@
               <ion-badge *ngIf="t.state==='free'">LIBERO</ion-badge>
               <ion-badge color="warning" *ngIf="t.state==='upcoming'">IN ARRIVO</ion-badge>
               <ion-badge color="danger" *ngIf="t.state==='busy'">OCCUPATO</ion-badge>
-              <ion-badge color="primary" *ngIf="t.state==='cleaning'">PULIZIA</ion-badge>
+              <ion-badge color="primary" *ngIf="t.state==='cleaning'">
+                PULIZIA {{ formatMMSS(t.cleaningRemainingSec) }}
+              </ion-badge>
             </ion-card-title>
 
             <ion-note *ngIf="t.resNow">
@@ -79,11 +106,32 @@
             🏷️ {{ t.resNow?.notes }}
           </ion-card-content>
 
-          <ion-item lines="none" class="actions">
-            <ion-button size="small" fill="outline" (click)="openDetails(t); $event.stopPropagation()">Dettagli</ion-button>
-            <ion-button size="small" *ngIf="t.state==='upcoming'" (click)="checkIn(t); $event.stopPropagation()">Check-in</ion-button>
-            <ion-button size="small" *ngIf="t.state==='busy'" (click)="printKitchen(t); $event.stopPropagation()">Stampa</ion-button>
-            <ion-button size="small" *ngIf="t.state==='free'" color="success" (click)="newReservation(t); $event.stopPropagation()">Nuova</ion-button>
+          <ion-item lines="none" class="actions" (click)="$event.stopPropagation()">
+            <ion-button size="small" fill="outline" (click)="openDetails(t)">Dettagli</ion-button>
+
+            <ion-button size="small"
+                        *ngIf="t.state==='upcoming'"
+                        [disabled]="checkInLoadingId()===t.resNext?.id"
+                        (click)="checkIn(t)">
+              <ion-spinner name="dots" *ngIf="checkInLoadingId()===t.resNext?.id" style="transform:scale(.7)"></ion-spinner>
+              <span *ngIf="checkInLoadingId()!==t.resNext?.id">Check-in</span>
+            </ion-button>
+
+            <ion-button size="small"
+                        *ngIf="t.state==='busy'"
+                        [disabled]="checkOutLoadingId()===t.resNow?.id"
+                        (click)="checkOut(t)">
+              <ion-spinner name="dots" *ngIf="checkOutLoadingId()===t.resNow?.id" style="transform:scale(.7)"></ion-spinner>
+              <span *ngIf="checkOutLoadingId()!==t.resNow?.id">Chiudi tavolo</span>
+            </ion-button>
+
+            <ion-button size="small" *ngIf="t.state==='busy'" (click)="printKitchen(t)">Stampa</ion-button>
+
+            <ion-button size="small" *ngIf="t.state==='cleaning'" (click)="freeNow(t)">
+              Libera ora
+            </ion-button>
+
+            <ion-button size="small" *ngIf="t.state==='free'" color="success" (click)="newReservation(t)">Nuova</ion-button>
           </ion-item>
 
         </ion-card>

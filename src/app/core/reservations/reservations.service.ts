@@ -3,13 +3,14 @@
 // - Hard delete: remove(id,{force?,notify?})
 // - Compat: updateStatus(id, action, reason?) e printDaily({date,status})
 // - Lookup: listRooms(), listTablesByRoom(roomId), listAllTablesAcrossRooms()
-// - 🆕 moveReservationTable(id, table_id): PUT /reservations/:id/table
+// - 🆕 changeTable(id, table_id): PUT /reservations/:id/table con fallback su update(...)
+// - 🆕 checkIn(id) / checkOut(id): POST /:id/checkin|checkout con fallback su updateStatus
 // - Fix RxJS imports per listAllTablesAcrossRooms
 // ============================================================================
 
 import { Injectable, inject, Inject } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
-import { Observable, map, catchError, switchMap, forkJoin, of } from 'rxjs';
+import { Observable, map, catchError, switchMap, forkJoin, of, throwError } from 'rxjs';
 import { API_URL } from '../tokens';
 
 export type ReservationStatus = 'pending' | 'accepted' | 'rejected' | 'cancelled';
@@ -37,6 +38,11 @@ export interface Reservation {
   // audit/tempi
   created_at?: string;
   updated_at?: string;
+
+  // 🆕 tempi sala
+  checkin_at?: string | null;
+  checkout_at?: string | null;
+  dwell_sec?: number | null;
 
   // opzionale (tracciamento server: strada B)
   created_by?: string | null;
@@ -75,7 +81,7 @@ export interface CountByStatusRes {
   cancelled: number;
 }
 
-export type StatusAction = 'accept' | 'reject' | 'cancel' | 'restore';
+export type StatusAction = 'accept' | 'reject' | 'cancel' | 'restore' | 'complete';
 export interface StatusChangeBody {
   action: StatusAction;
   reason?: string;
@@ -99,6 +105,8 @@ export class ReservationsApi {
     label: t.label ?? t.name ?? (t.table_number != null ? `Tavolo ${t.table_number}` : null),
     capacity: t.capacity ?? (t.seats != null ? Number(t.seats) : null),
   });
+
+  private unwrapReservation = <T = any>(res: any): T => (res?.reservation ?? res);
 
   // -------------------- CRUD -------------------------------------------------
 
@@ -139,7 +147,7 @@ export class ReservationsApi {
     const payload = typeof a === 'string' ? { action: a, reason: b } : a;
     return this.http
       .put<any>(`${this.baseUrl}/reservations/${id}/status`, payload)
-      .pipe(map(res => (res?.reservation ?? res) as Reservation));
+      .pipe(map(res => this.unwrapReservation<Reservation>(res)));
   }
 
   rejectAndNotify(
@@ -223,8 +231,54 @@ export class ReservationsApi {
   }
 
   // === 🆕 Sposta prenotazione su un altro tavolo =============================
-  /** PUT /reservations/:id/table  { table_id } */
-  moveReservationTable(id: number, table_id: number): Observable<{ ok: boolean }> {
-    return this.http.put<{ ok: boolean }>(`${this.baseUrl}/reservations/${id}/table`, { table_id });
+  changeTable(id: number, table_id: number): Observable<Reservation> {
+    const primary = this.http.put<any>(`${this.baseUrl}/reservations/${id}/table`, { table_id });
+    return primary.pipe(
+      map(res => this.unwrapReservation<Reservation>(res)),
+      catchError(() => this.update(id, { table_id }))
+    );
+  }
+
+  // === 🆕 CHECK-IN / CHECK-OUT ===============================================
+
+  /**
+   * Check-in esplicito:
+   * - prova POST /reservations/:id/checkin { at? }
+   * - fallback su updateStatus(id,'accept') se 404/501 o rotta assente
+   * - unwrap {reservation} se il BE incapsula
+   */
+  checkIn(id: number, at?: string): Observable<Reservation> {
+    return this.http.post<any>(`${this.baseUrl}/reservations/${id}/checkin`, at ? { at } : {})
+      .pipe(
+        map(res => this.unwrapReservation<Reservation>(res)),
+        catchError((err) => {
+          // degrado solo se è rotta mancante/501
+          const code = Number(err?.status || 0);
+          if (code === 404 || code === 501) {
+            return this.updateStatus(id, 'accept');
+          }
+          return throwError(() => err);
+        })
+      );
+  }
+
+  /**
+   * Check-out esplicito:
+   * - prova POST /reservations/:id/checkout { at? }
+   * - fallback su updateStatus(id,'complete') se 404/501
+   * - unwrap {reservation}
+   */
+  checkOut(id: number, at?: string): Observable<Reservation> {
+    return this.http.post<any>(`${this.baseUrl}/reservations/${id}/checkout`, at ? { at } : {})
+      .pipe(
+        map(res => this.unwrapReservation<Reservation>(res)),
+        catchError((err) => {
+          const code = Number(err?.status || 0);
+          if (code === 404 || code === 501) {
+            return this.updateStatus(id, 'complete');
+          }
+          return throwError(() => err);
+        })
+      );
   }
 }

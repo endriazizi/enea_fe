@@ -5,6 +5,10 @@
 // - Extra = ingredienti globali - base (chip verdi AGGIUNGI con qty+prezzi)
 // - Preset + toggle “Somma EXTRA nel totale”
 // - Log verbosi (emoji) per diagnosi rapida in DevTools
+// - 🆕 Prefill da query params: ?table_id=XX&reservation_id=YY
+// - 🆕 Badge “Tavolo X” + Toggle “Crea prenotazione alla conferma”
+// - 🆕 Se toggle ON: creo prenotazione al volo, check-in immediato, lego l’ordine
+// - 🆕 FIX: invio customer_first / customer_last / email (+ room_id se noto)
 // ============================================================================
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { NgIf, NgFor, DecimalPipe, DatePipe, SlicePipe } from '@angular/common';
@@ -15,7 +19,7 @@ import {
   IonGrid, IonRow, IonCol, IonCard, IonCardHeader, IonCardTitle, IonCardContent,
   IonFooter, IonModal, IonSelect, IonSelectOption, IonIcon, IonChip, IonToggle
 } from '@ionic/angular/standalone';
-import { Router } from '@angular/router';
+import { Router, ActivatedRoute } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
 
 import { OrdersApi, ProductIngredientChip, Ingredient } from '../../core/orders/orders.service';
@@ -35,6 +39,7 @@ interface Preset {
   removedBaseIds?: number[]; extraQty?: Record<number, number>; includeExtrasInTotal?: boolean;
 }
 const COVER_PRICE_EUR = 1.50;
+const RES_DEFAULT_DURATION_MIN = 90; // 🕒 durata stimata per prenotazione creata al volo
 
 @Component({
   standalone: true,
@@ -56,13 +61,15 @@ export class OrderBuilderPage implements OnInit {
   private wa  = inject(WhatsAppService);
   private auth = inject(AuthService);
   private router = inject(Router);
+  private route  = inject(ActivatedRoute);
 
   readonly COVER_PRICE = COVER_PRICE_EUR;
 
   // form
-  customerName=signal(''); onInputName(ev:any){ this.customerName.set((ev?.detail?.value ?? ev?.target?.value ?? '').toString()); }
-  customerPhone=signal(''); onInputPhone(ev:any){ this.customerPhone.set((ev?.detail?.value ?? ev?.target?.value ?? '').toString()); }
-  note=signal('');          onInputNote (ev:any){ this.note.set((ev?.detail?.value ?? ev?.target?.value ?? '').toString()); }
+  customerName = signal('');  onInputName (ev:any){ this.customerName.set((ev?.detail?.value ?? ev?.target?.value ?? '').toString()); }
+  customerPhone= signal('');  onInputPhone(ev:any){ this.customerPhone.set((ev?.detail?.value ?? ev?.target?.value ?? '').toString()); }
+  customerEmail= signal('');  onInputEmail(ev:any){ this.customerEmail.set((ev?.detail?.value ?? ev?.target?.value ?? '').toString()); } // 🆕 email
+  note         = signal('');  onInputNote (ev:any){ this.note.set((ev?.detail?.value ?? ev?.target?.value ?? '').toString()); }
 
   // coperti
   private readonly LS_COVERS='order.covers';
@@ -98,6 +105,11 @@ export class OrderBuilderPage implements OnInit {
   selectedReservation=signal<Reservation|null>(null);
   reservationMeta = signal<{ id: number; table_id?: number|null; room_id?: number|null; start_at?: string|null } | null>(null);
 
+  // 🆕 contesto tavolo + toggle prenotazione
+  tableId = signal<number|null>(null);
+  roomId  = signal<number|null>(null); // 🆕 prendo room_id dai query params se disponibile
+  createReservationOnConfirm = signal<boolean>(false);
+
   // personalizza
   customOpen=signal(false);
   private _targetItem: CatalogItem | null = null;
@@ -122,7 +134,7 @@ export class OrderBuilderPage implements OnInit {
   incExtra(id:number){ const next={...this.extraQty()}; next[id]=(next[id]||0)+1; this.extraQty.set(next); }
   decExtra(id:number){ const next={...this.extraQty()}; next[id]=Math.max(0,(next[id]||0)-1); if(next[id]===0) delete next[id]; this.extraQty.set(next); }
 
-  // preview costo extra (computed così il template può usare extraCostPreview())
+  // preview costo extra (computed)
   private _computeExtraTotalPerUnit(): number {
     let sum=0;
     for(const [idStr,q] of Object.entries(this.extraQty())){
@@ -137,9 +149,44 @@ export class OrderBuilderPage implements OnInit {
   async ngOnInit(){
     console.log('🧱 [OrderBuilder] init');
     this.covers.set(Number(localStorage.getItem(this.LS_COVERS) || '0') || 0);
+
+    // carico tutto e poi gestisco prefill da query
     await this._loadAllIngredients();
     await this._loadMenu();
     await this._loadReservationsToday();
+
+    // 🆕 Prefill da query params (?table_id, ?reservation_id, ?room_id)
+    this.route.queryParams.subscribe(async (qp) => {
+      try{
+        const tId = Number(qp?.table_id || 0) || null;
+        const rId = Number(qp?.room_id  || 0) || null; // 🆕
+        const resId = Number(qp?.reservation_id || qp?.res_id || 0) || null;
+
+        this.tableId.set(tId);
+        this.roomId.set(rId);
+
+        if (tId && !resId) {
+          // se arrivo da tavolo senza prenotazione → toggle ON di default
+          this.createReservationOnConfirm.set(true);
+        }
+
+        if (resId) {
+          // 1) tenta da pickList già in memoria (solo oggi)
+          let found: Reservation | null =
+            (this.pickList() || []).find(r => Number(r.id) === resId) || null;
+
+          // 2) niente getById nell'API → se non è tra le prenotazioni odierne, parto ex-novo
+          if (found) {
+            console.log('✅ [OrderBuilder] prefill from reservation', { resId, tId });
+            this.onPickReservation(found);
+          } else {
+            console.log('ℹ️ [OrderBuilder] reservation not in today list (no direct fetch)', { resId, tId });
+          }
+        } else {
+          console.log('ℹ️ [OrderBuilder] no reservation_id: start ex-novo', { tId });
+        }
+      }catch(e){ console.warn('⚠️ [OrderBuilder] prefill KO', e); }
+    });
   }
 
   onLogout(){ this.auth.logout(); this.router.navigate(['/login'], { queryParams: { redirect: '/orders/new' } }); }
@@ -153,7 +200,6 @@ export class OrderBuilderPage implements OnInit {
       const v = (input as any)[k];
       if (Array.isArray(v)) return v as T[];
     }
-    // ultimo tentativo: primo valore che è un array
     for (const v of Object.values(input)){
       if (Array.isArray(v)) return v as T[];
     }
@@ -164,6 +210,20 @@ export class OrderBuilderPage implements OnInit {
     const d=new Date(); const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const day=String(d.getDate()).padStart(2,'0');
     return `${y}-${m}-${day}`;
   }
+  private _fmtLocalYYYYMMDDTHHMM(d:Date){
+    const pad=(n:number)=>String(n).padStart(2,'0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+  private _splitName(full:string){ // 🧠 split "Nome Cognome" → {first,last}
+    const s=(full||'').trim().replace(/\s+/g,' ');
+    if(!s) return { first:'', last:'' };
+    const bits=s.split(' ');
+    if(bits.length===1) return { first:bits[0], last:'' };
+    const first=bits.shift() as string;
+    const last=bits.join(' ');
+    return { first, last };
+  }
+
   private async _loadReservationsToday(){
     try{
       const d=this._todayISO();
@@ -210,6 +270,7 @@ export class OrderBuilderPage implements OnInit {
     const name = r.display_name || `${r.customer_first || ''} ${r.customer_last || ''}`.trim();
     this.customerName.set(name || '');
     this.customerPhone.set((r.phone || '').toString());
+    this.customerEmail.set((r.email || '').toString()); // 🆕 carico email se c'è
     const ppl = Number(r.party_size || 0) || 0;
     this.covers.set(ppl); localStorage.setItem(this.LS_COVERS, String(ppl));
 
@@ -238,7 +299,12 @@ export class OrderBuilderPage implements OnInit {
   incLine(line:CartItem){ this.cart.set(this.cart().map(r=> r===line ? {...r, qty:r.qty+1} : r)); }
   decLine(line:CartItem){
     const next=[...this.cart()]; const idx=next.indexOf(line);
-    if(idx>=0){ const cur={...next[idx], qty:Math.max(0,next[idx].qty-1)}; if(cur.qty===0) next.splice(idx,1); else next[idx]=cur; this.cart.set(next); }
+    if(idx>=0){
+      // ❗ FIX TS1312: usare ":" e NON "=" nell’object literal
+      const cur={ ...next[idx], qty: Math.max(0, next[idx].qty - 1) };
+      if(cur.qty===0) next.splice(idx,1); else next[idx]=cur;
+      this.cart.set(next);
+    }
   }
   removeCartLine(line:CartItem){
     this.cart.set(this.cart().filter(r =>
@@ -257,12 +323,8 @@ export class OrderBuilderPage implements OnInit {
     this.extras.set([]);
     this.customOpen.set(true);
 
-    
-      // Assicuriamoci che gli ingredienti globali siano disponibili (apertura modal immediata)
-      if(!this.allIngredients()?.length){
-        await this._loadAllIngredients();
-      }
-if(!m?.id){ console.log('🧩⚠️ prodotto senza id → ingredienti base non caricati'); return; }
+    if(!this.allIngredients()?.length){ await this._loadAllIngredients(); }
+    if(!m?.id){ console.log('🧩⚠️ prodotto senza id → ingredienti base non caricati'); return; }
 
     try{
       console.log('🧩 [Customize] fetch base + compute extra…', { productId: m.id });
@@ -345,7 +407,6 @@ if(!m?.id){ console.log('🧩⚠️ prodotto senza id → ingredienti base non c
   }
   applyPresetAdd(p:Preset){
     const t=this._targetItem; if(!t) return;
-    // ricalcolo extraPerUnit usando gli attuali prezzi degli extra globali
     let extraPerUnit=0;
     if(p.extraQty && Object.keys(p.extraQty).length){
       for(const [idStr,q] of Object.entries(p.extraQty)){
@@ -360,8 +421,74 @@ if(!m?.id){ console.log('🧩⚠️ prodotto senza id → ingredienti base non c
   }
   deletePreset(p:Preset){ this.presets.set(this.presets().filter(x=>x.id!==p.id)); this._persistPresets(); console.log('🗑️ preset eliminato', p.id); }
 
+  // 🆕 Creazione prenotazione on-demand (solo se toggle ON e non c'è già meta)
+  private async _maybeCreateReservationOnConfirm(): Promise<void> {
+    if (!this.createReservationOnConfirm()) return;
+    if (this.reservationMeta()) return;
+    const tId = this.tableId();
+    if (!tId) return;
+
+    const rawName = (this.customerName() || 'Cliente').trim();
+    const { first, last } = this._splitName(rawName);
+    const phone  = (this.customerPhone() || '').trim() || null;
+    const email  = (this.customerEmail() || '').trim() || null;
+    const ppl    = this.covers() || 0;
+    const note   = (this.note() || '').trim() || null;
+
+    const start = new Date();
+    const end   = new Date(start.getTime() + RES_DEFAULT_DURATION_MIN*60*1000);
+
+    const payload:any = {
+      // 👇 come da body di riferimento: nome/cognome/email separati
+      customer_first: first || null,
+      customer_last : last || null,
+      phone,
+      email,
+      party_size: ppl,
+      start_at : this._fmtLocalYYYYMMDDTHHMM(start),
+      end_at   : this._fmtLocalYYYYMMDDTHHMM(end),
+      room_id  : this.roomId() ?? null,
+      table_id : tId,
+      notes    : note || undefined,
+      status   : 'accepted'
+    };
+
+    try{
+      console.log('🧾 [OrderBuilder] create reservation on confirm…', payload);
+      const anyRes:any = this.res as any;
+      const createdAny: any = await firstValueFrom(
+        typeof anyRes.create === 'function' ? anyRes.create(payload) :
+        typeof anyRes.add === 'function'    ? anyRes.add(payload) :
+        anyRes.createReservation(payload)
+      );
+
+      const c: any = createdAny || {};
+      const newId = Number(c.id || c.reservation?.id || 0) || 0;
+
+      if (newId){
+        try{
+          if (typeof anyRes.checkIn === 'function') await firstValueFrom(anyRes.checkIn(newId));
+        }catch(ci){ console.warn('⚠️ check-in auto KO (non blocco)', ci); }
+        this.reservationMeta.set({
+          id:newId,
+          table_id: tId,
+          room_id : (c.room_id ?? this.roomId() ?? null) || null,
+          start_at: payload.start_at
+        });
+        console.log('✅ prenotazione creata + check-in', { id:newId });
+      } else {
+        console.warn('⚠️ create reservation: risposta inattesa', c);
+      }
+    }catch(e){
+      console.error('💥 create reservation KO', e);
+    }
+  }
+
   async confirmOrder(){
     try{
+      // 🆕 Se richiesto, crea prenotazione prima di creare l'ordine
+      await this._maybeCreateReservationOnConfirm();
+
       const includeExtras=this.includeExtrasInTotal();
       const items:OrderItemInput[]=this.cart().map(r=>({
         name:r.name, qty:r.qty, price:Number(r.price)+(includeExtras?Number(r.extra_total||0):0),
@@ -372,10 +499,21 @@ if(!m?.id){ console.log('🧩⚠️ prodotto senza id → ingredienti base non c
       const payload:OrderInputPayload={ customer_name:(this.customerName()||'Cliente').trim(),
         phone:(this.customerPhone()||'').trim() || null, note:(this.note()||'').trim() || null,
         people:this.covers() || null, channel:'admin', items };
-      const meta=this.reservationMeta(); if(meta){ payload.reservation_id=meta.id; payload.table_id=meta.table_id ?? null; payload.room_id=meta.room_id ?? null; payload.scheduled_at=meta.start_at ?? null; }
+
+      const meta=this.reservationMeta();
+      if(meta){
+        payload.reservation_id = meta.id;
+        payload.table_id       = meta.table_id ?? (this.tableId() ?? null);
+        payload.room_id        = meta.room_id ?? this.roomId() ?? null;
+        payload.scheduled_at   = meta.start_at ?? null;
+      }else if (this.tableId()){
+        // anche senza prenotazione voglio legare l'ordine al tavolo, se presente
+        payload.table_id = this.tableId();
+        payload.room_id  = this.roomId() ?? null;
+      }
 
       console.log('📤 create order…', payload);
-      const created=await firstValueFrom(this.api.create(payload as any));
+      const created:any = await firstValueFrom(this.api.create(payload as any));
       console.log('✅ creato', created);
       try{ await firstValueFrom(this.api.print(created.id)); console.log('🖨️ print OK'); }catch(pe){ console.warn('🖨️ print KO (non blocco)', pe); }
       this.cart.set([]); this.customOpen.set(false); this.router.navigate(['/orders']);

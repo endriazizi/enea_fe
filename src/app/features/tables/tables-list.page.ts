@@ -4,11 +4,12 @@
 // - Card compatte con stato: 🟢 free | 🟡 upcoming | 🔴 busy | 🔵 cleaning (solo FE)
 // - Segment per SALA, ricerca testuale, Quick day picker (riuso app-date-quick)
 // - Signals + commenti lunghi + log con emoji, nel tuo stile
-// - 🆕 Action Sheet: Dettagli / Check-in / Sposta / Stampa / Chiudi tavolo / Libera ora
+// - 🆕 Action Sheet: Dettagli / Check-in / Sposta / Stampa / Chiudi tavolo / Libera ora / Nuovo ordine
 // - 🛠️ provider overlay (Modal/ActionSheet/Toast) → fix NG0201
 // - 🆕 KPI bar
 // - 🆕 Check-in (disabilitazione + toast + reload)  ✅ FIX: considera checkin_at
 // - 🆕 Check-out + Pulizia 5:00 (solo FE): countdown mm:ss e "Libera ora"
+// - 🆕 Ordine dal tavolo → order-builder (prefill se c'è prenotazione)
 // ============================================================================
 
 import {
@@ -98,9 +99,10 @@ export class TablesListPage implements OnInit, OnDestroy {
   kpiTablesFree    = computed(() => this.tablesSig().filter(t => t.state==='free').length);
   kpiFreeSeatsTotal= computed(() => this.sumBy(this.tablesSig().filter(t => t.state==='free'), t => t.capacity || 0));
   kpiFreeSeatsDist = computed(() => {
-    const free = this.tablesSig().filter(t => t.state==='free');
     const m = new Map<number, number>();
-    for (const f of free) { const c = f.capacity || 0; if (!c) continue; m.set(c, (m.get(c) || 0) + 1); }
+    for (const f of this.tablesSig().filter(t => t.state==='free')) {
+      const c = f.capacity || 0; if (!c) continue; m.set(c, (m.get(c) || 0) + 1);
+    }
     return [...m.entries()].sort((a,b)=>a[0]-b[0]).map(([cap,count]) => `${cap}×${count}`).join(' • ');
   });
 
@@ -117,13 +119,12 @@ export class TablesListPage implements OnInit, OnDestroy {
     this.reload();
     this.timerId = setInterval(() => this.tick.update(v => v + 1), 1000);
 
-    // hook socket best-effort: se l'app ha già window.io aperto altrove, leggilo
+    // hook socket best-effort
     try {
       const w: any = (window as any);
       const socket = w?.__tables_socket || w?.socket || null;
       if (socket && !w.__tables_list_hooked) {
         w.__tables_list_hooked = true;
-        // quando arriva un checkout, forza la finestra di pulizia anche sui client passivi
         socket.on('reservation-checkout', (payload: { table_id?: number|null, cleaning_until?: string }) => {
           const tId = Number(payload?.table_id || 0);
           const untilIso = payload?.cleaning_until || null;
@@ -166,21 +167,18 @@ export class TablesListPage implements OnInit, OnDestroy {
     const override = this.cleaningOverride();
 
     return this.tablesRawSig().map(t => {
-      // ⚠️ FIX 1: non filtrare più con r.end_at (dati legacy possono averlo nullo)
+      // ⚠️ FIX legacy: non filtrare con end_at nullo
       const list = (byTable.get(Number(t.id)) || []).filter(r => !!r.start_at);
       const [byTimeNow, byTimeNext] = pickNowAndNext(list, day, isToday ? now : null);
 
-      // 🧠 se qualcuno ha fatto check-in, consideralo "occupante" anche in anticipo.
-      //    MA: se è stato fatto IL CHECK-OUT, NON è più occupante (escluso in pickNowAndNext).
+      // 🧠 occupante = ora in fascia OR check-in aperto (no checkout)
       const checkedIn = findCheckedIn(list);
       let resNow = byTimeNow || checkedIn || undefined;
-      let resNext = (!resNow ? byTimeNext : undefined); // se ho checkin, quella non è più "next"
+      let resNext = (!resNow ? byTimeNext : undefined);
 
       let state: TableState = resNow ? 'busy' : (resNext ? 'upcoming' : 'free');
 
-      // Pulizia (solo FE)
-      // - DEFAULT: ultima fine effettiva (checkout_at || end_at || start_at) + 5:00
-      // - OVERRIDE: priorità assoluta (socket o "Libera ora")
+      // Pulizia (solo FE): ultima fine effettiva + override (socket/Libera ora)
       let cleaningUntilMs: number | undefined;
       if (!resNow && !resNext) {
         const last = lastEndTodayBefore(list, day, now);
@@ -188,8 +186,6 @@ export class TablesListPage implements OnInit, OnDestroy {
 
         const hasOverride = override.has(t.id);
         const ov = hasOverride ? override.get(t.id)! : undefined;
-
-        // ⬅️ FIX 2: override prioritario (vince anche se <= now → tavolo torna subito 🟢)
         const effective = (ov !== undefined) ? ov : candidateFromEnd;
 
         if (isToday && effective > nowMs) {
@@ -265,6 +261,18 @@ export class TablesListPage implements OnInit, OnDestroy {
     this.router.navigate(['/reservations/new'], extras);
   }
 
+  // 🆕 Avvia Order Builder dal tavolo (prefill se c’è prenotazione)
+  startOrder(t: TableCard) {
+    // preferisco la prenotazione in corso, altrimenti la prossima; se nulla → ex-novo
+    const ref = t.resNow ?? t.resNext ?? null;
+    const queryParams: any = { table_id: t.id };
+    if (ref?.id) queryParams.reservation_id = ref.id;
+
+    console.log('🧾 [TablesList] startOrder ▶️', { table_id: t.id, reservation_id: ref?.id || null });
+    // NB: rotta del builder: usa '/orders/new' (coerente con redirect del tuo builder). Cambiala qui se diversa.
+    this.router.navigate(['/orders/new'], { queryParams });
+  }
+
   // === Check-in =====================================================
   async checkIn(t: TableCard) {
     const ref = t.resNext ?? t.resNow;
@@ -291,20 +299,17 @@ export class TablesListPage implements OnInit, OnDestroy {
       this.checkOutLoadingId.set(ref.id);
       console.log('🧹 [TablesList] check-out ▶️', { res_id: ref.id, table_id: t.id });
 
-      // ❗ Se l'API espone checkOutWithMeta (ritorna { reservation, cleaning_until }),
-      //    lo uso; altrimenti continuo con il tuo checkOut "semplice".
+      // Se disponibile, usa checkOutWithMeta → { cleaning_until }
       const anyApi: any = this.api as any;
       let untilMs: number | null = null;
       if (typeof anyApi.checkOutWithMeta === 'function') {
         const res = await anyApi.checkOutWithMeta(ref.id).toPromise();
-        if (res?.cleaning_until) {
-          untilMs = new Date(res.cleaning_until).getTime();
-        }
+        if (res?.cleaning_until) untilMs = new Date(res.cleaning_until).getTime();
       } else {
-        await this.api.checkOut(ref.id).toPromise(); // POST /checkout → fallback updateStatus('complete')
+        await this.api.checkOut(ref.id).toPromise();
       }
 
-      // forzo subito finestra pulizia in FE
+      // forza subito finestra pulizia in FE
       const until = untilMs ?? (Date.now() + this.CLEAN_SEC * 1000);
       const cloned = new Map(this.cleaningOverride());
       cloned.set(t.id, until);
@@ -321,7 +326,7 @@ export class TablesListPage implements OnInit, OnDestroy {
   }
 
   async freeNow(t: TableCard) {
-    // 🔓 Override esplicito: metto l'istante attuale, che grazie alla FIX batte il default.
+    // 🔓 Override esplicito: metto l'istante attuale → vince sul default
     const map = new Map(this.cleaningOverride());
     map.set(t.id, Date.now()); // scade adesso → torna 🟢 free
     this.cleaningOverride.set(map);
@@ -364,8 +369,12 @@ export class TablesListPage implements OnInit, OnDestroy {
       const isBusy = t.state === 'busy';
       const isCleaning = t.state === 'cleaning';
 
-    const buttons: any[] = [];
+      const buttons: any[] = [];
       if (!isFree) buttons.push({ text: 'Dettagli', icon: 'information-circle-outline', handler: () => this.openDetails(t) });
+
+      // 🆕 Ordine sempre disponibile
+      buttons.push({ text: 'Nuovo ordine', icon: 'cart-outline', handler: () => this.startOrder(t) });
+
       if (isUpcoming) buttons.push({ text: 'Check-in', icon: 'log-in-outline', handler: () => this.checkIn(t) });
       if (t.resNow || t.resNext) buttons.push({ text: 'Sposta', icon: 'swap-horizontal-outline', handler: () => this.moveReservation(t) });
       if (isBusy) {
@@ -404,11 +413,10 @@ function groupBy<T>(arr: T[], key: (x:T)=>number): Map<number, T[]> {
   const m = new Map<number, T[]>(); for (const it of arr || []) { const k = key(it); const list = m.get(k) || []; list.push(it); m.set(k, list); } return m;
 }
 
-// ⚠️ FIX: non considerare come "occupante" una prenotazione già chiusa (checkout_at valorizzato)
+// ⚠️ non considerare occupante una prenotazione già chiusa (checkout_at)
 function pickNowAndNext(res: Reservation[], dayISO: string, now: Date | null): [Reservation|undefined, Reservation|undefined] {
   const inDay = res.filter(r => (r.start_at || '').startsWith(dayISO)); if (!inDay.length) return [undefined, undefined];
   inDay.sort((a,b) => String(a.start_at).localeCompare(String(b.start_at)));
-  // escludo tutte quelle già chiuse
   const candidates = inDay.filter(r => !r.checkout_at);
   if (!now) return [undefined, candidates[0]];
   const nowMs = now.getTime(); let cur: Reservation|undefined; let next: Reservation|undefined;
@@ -421,7 +429,7 @@ function pickNowAndNext(res: Reservation[], dayISO: string, now: Date | null): [
   return [cur, cur ? next : (next || undefined)];
 }
 
-// Usa la "fine effettiva": checkout_at se presente, altrimenti end_at/start_at
+// “fine effettiva”: checkout_at se presente, altrimenti end_at/start_at
 function lastEndTodayBefore(res: Reservation[], dayISO: string, now: Date): Date | null {
   const inDay = res.filter(r => ((r.end_at || r.start_at || '').startsWith(dayISO)));
   const ends = inDay.map(r => new Date((r as any).checkout_at || r.end_at || r.start_at));

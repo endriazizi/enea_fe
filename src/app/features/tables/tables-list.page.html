@@ -1,3 +1,4 @@
+<!-- src/app/features/tables/tables-list.page.html -->
 <ion-header>
   <ion-toolbar>
     <ion-title>Tavoli (Oggi)</ion-title>
@@ -108,6 +109,9 @@
 
           <ion-item lines="none" class="actions" (click)="$event.stopPropagation()">
             <ion-button size="small" fill="outline" (click)="openDetails(t)">Dettagli</ion-button>
+
+            <!-- 🆕 Avvio ordine dal tavolo -->
+            <ion-button size="small" color="tertiary" (click)="startOrder(t)">Ordine</ion-button>
 
             <ion-button size="small"
                         *ngIf="t.state==='upcoming'"

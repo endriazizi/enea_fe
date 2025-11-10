@@ -1,6 +1,13 @@
 <!-- src/app/features/orders/order-builder.page.html -->
 <ion-header>
   <ion-toolbar>
+    <!-- 🆕 Badge tavolo in header -->
+    <ion-buttons slot="start">
+      <ion-chip *ngIf="tableId()" outline="true">
+        <ion-label>Tavolo {{ tableId() }}</ion-label>
+      </ion-chip>
+    </ion-buttons>
+
     <ion-title>Admin</ion-title>
     <ion-buttons slot="end">
       <ion-button (click)="onLogout()">Logout</ion-button>
@@ -20,6 +27,12 @@
     </ion-select>
   </ion-item>
 
+  <!-- 🆕 Toggle: crea prenotazione alla conferma (visibile solo se provieni da tavolo e non hai una prenotazione selezionata) -->
+  <ion-item lines="full" *ngIf="tableId() && !selectedReservation()">
+    <ion-label>Crea prenotazione alla conferma</ion-label>
+    <ion-toggle [checked]="createReservationOnConfirm()" (ionChange)="createReservationOnConfirm.set(!!$any($event.detail).checked)"></ion-toggle>
+  </ion-item>
+
   <ion-item>
     <ion-label position="stacked">Cliente</ion-label>
     <ion-input inputmode="text" placeholder="Nome e cognome" [value]="customerName()" (ionInput)="onInputName($event)"></ion-input>
@@ -28,6 +41,12 @@
   <ion-item>
     <ion-label position="stacked">Telefono</ion-label>
     <ion-input inputmode="tel" placeholder="+39…" [value]="customerPhone()" (ionInput)="onInputPhone($event)"></ion-input>
+  </ion-item>
+
+  <!-- 🆕 Email -->
+  <ion-item>
+    <ion-label position="stacked">Email</ion-label>
+    <ion-input type="email" placeholder="es. mario.rossi@mail.it" [value]="customerEmail()" (ionInput)="onInputEmail($event)"></ion-input>
   </ion-item>
 
   <ion-item>

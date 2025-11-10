@@ -70,8 +70,14 @@ export class OrdersApi {
     return this.http.patch<{ ok: true }>(`${this.base}/orders/${id}/status`, { status });
   }
 
+  // stampa “classica” (conto / dual nel be)
   print(id: number): Observable<{ ok: boolean }> {
     return this.http.post<{ ok: boolean }>(`${this.base}/orders/${id}/print`, {});
+  }
+
+  // 🆕 stampa COMANDA per centro (pizzeria | cucina)
+  printComanda(id: number, center: 'pizzeria' | 'cucina' = 'pizzeria', copies = 1): Observable<{ ok: boolean }> {
+    return this.http.post<{ ok: boolean }>(`${this.base}/orders/${id}/print/comanda`, { center, copies });
   }
 
   stream(): EventSource {

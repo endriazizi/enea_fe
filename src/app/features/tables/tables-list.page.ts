@@ -197,7 +197,7 @@ export class TablesListPage implements OnInit, OnDestroy {
 
       return {
         id: t.id,
-        number: String(t.table_number || (t as any).label || t.id),
+        number: String((t as any).table_number || (t as any).label || t.id),
         room_id: (t as any).room_id!,
         room_name: (t as any).room_name || '',
         capacity: Number((t as any).capacity ?? (t as any).seats ?? 0),
@@ -265,10 +265,11 @@ export class TablesListPage implements OnInit, OnDestroy {
   startOrder(t: TableCard) {
     // preferisco la prenotazione in corso, altrimenti la prossima; se nulla → ex-novo
     const ref = t.resNow ?? t.resNext ?? null;
-    const queryParams: any = { table_id: t.id };
+    // 🆕 passo anche room_id così Order Builder può salvarlo nel meta ordine/prenotazione
+    const queryParams: any = { table_id: t.id, room_id: t.room_id };
     if (ref?.id) queryParams.reservation_id = ref.id;
 
-    console.log('🧾 [TablesList] startOrder ▶️', { table_id: t.id, reservation_id: ref?.id || null });
+    console.log('🧾 [TablesList] startOrder ▶️', { table_id: t.id, room_id: t.room_id, reservation_id: ref?.id || null });
     // NB: rotta del builder: usa '/orders/new' (coerente con redirect del tuo builder). Cambiala qui se diversa.
     this.router.navigate(['/orders/new'], { queryParams });
   }

@@ -54,6 +54,26 @@
     <ion-textarea autoGrow="true" placeholder="Es. senza cipolla" [value]="note()" (ionInput)="onInputNote($event)"></ion-textarea>
   </ion-item>
 
+  <!-- 🆕 Azione post-conferma: CONTO vs COMANDA -->
+  <ion-item lines="full" style="--inner-padding-end:0;">
+    <ion-label>Alla conferma</ion-label>
+    <ion-segment [value]="printMode()" (ionChange)="printMode.set($any($event.detail).value)" mode="md">
+      <ion-segment-button value="conto">Stampa conto</ion-segment-button>
+      <ion-segment-button value="comanda">Invia comanda</ion-segment-button>
+    </ion-segment>
+  </ion-item>
+
+  <!-- 🆕 Centro comanda (se selezionata "comanda") -->
+  <ion-item *ngIf="printMode() === 'comanda'">
+    <ion-label position="stacked">Centro comanda</ion-label>
+    <ion-segment [value]="comandaCenter()" (ionChange)="comandaCenter.set($any($event.detail).value)" mode="md">
+      <ion-segment-button value="pizzeria">Pizzeria</ion-segment-button>
+      <ion-segment-button value="cucina">Cucina</ion-segment-button>
+    </ion-segment>
+    <!-- ℹ️ hint: la comanda stamperà il nome tavolo dalle meta ordine quando disponibili -->
+    <ion-note slot="helper" color="medium">La comanda includerà “Tavolo …” se l’ordine ha table_id/numero.</ion-note>
+  </ion-item>
+
   <div style="padding:16px 16px 8px;">
     <div style="display:flex; align-items:center; gap:12px;">
       <div style="font-weight:600;">Coperti</div>

@@ -5,10 +5,11 @@
 // - Extra = ingredienti globali - base (chip verdi AGGIUNGI con qty+prezzi)
 // - Preset + toggle “Somma EXTRA nel totale”
 // - Log verbosi (emoji) per diagnosi rapida in DevTools
-// - 🆕 Prefill da query params: ?table_id=XX&reservation_id=YY
+// - 🆕 Prefill da query params: ?table_id=XX&reservation_id=YY&room_id=ZZ
 // - 🆕 Badge “Tavolo X” + Toggle “Crea prenotazione alla conferma”
 // - 🆕 Se toggle ON: creo prenotazione al volo, check-in immediato, lego l’ordine
 // - 🆕 FIX: invio customer_first / customer_last / email (+ room_id se noto)
+// - 🆕 Scelta post-conferma: STAMPA CONTO oppure invia COMANDA (centro PIZZERIA/CUCINA)
 // ============================================================================
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import { NgIf, NgFor, DecimalPipe, DatePipe, SlicePipe } from '@angular/common';
@@ -109,6 +110,10 @@ export class OrderBuilderPage implements OnInit {
   tableId = signal<number|null>(null);
   roomId  = signal<number|null>(null); // 🆕 prendo room_id dai query params se disponibile
   createReservationOnConfirm = signal<boolean>(false);
+
+  // 🆕 scelta post-conferma: 'conto' | 'comanda'
+  printMode = signal<'conto' | 'comanda'>('conto');
+  comandaCenter = signal<'pizzeria' | 'cucina'>('pizzeria');
 
   // personalizza
   customOpen=signal(false);
@@ -515,7 +520,21 @@ export class OrderBuilderPage implements OnInit {
       console.log('📤 create order…', payload);
       const created:any = await firstValueFrom(this.api.create(payload as any));
       console.log('✅ creato', created);
-      try{ await firstValueFrom(this.api.print(created.id)); console.log('🖨️ print OK'); }catch(pe){ console.warn('🖨️ print KO (non blocco)', pe); }
+
+      // 🖨️ post-azione: CONTO oppure COMANDA
+      if (this.printMode() === 'conto') {
+        try{
+          await firstValueFrom(this.api.print(created.id));
+          console.log('🖨️ conto OK');
+        }catch(pe){ console.warn('🖨️ conto KO (non blocco)', pe); }
+      } else {
+        try{
+          const center = this.comandaCenter();
+          await firstValueFrom(this.api.printComanda(created.id, center, 1));
+          console.log(`🧾 ${center.toUpperCase()} OK`);
+        }catch(ke){ console.warn('🧾 comanda KO (non blocco)', ke); }
+      }
+
       this.cart.set([]); this.customOpen.set(false); this.router.navigate(['/orders']);
     }catch(e){ console.error('💥 create KO', e); }
   }

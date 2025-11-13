@@ -1,6 +1,30 @@
-.page-tables { --padding-top: 6px; }
+/* src/app/features/tables/tables-list.page.scss */
+/* === Tocchi rapidi richiesti ===================================== */
+/* 1) Allineo la barra Data (chip + picker) con gap pulito */
+.date-ui {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.date-ui ion-chip { --padding-start: 8px; --padding-end: 8px; }
 
+/* 2) Segment comodi su mobile: gap + overflow-x nativo, scrollbar nascosta */
 .filters { display: grid; gap: 8px; margin-bottom: 10px; }
+.filters .row2 { display: grid; gap: 8px; }
+
+@media (max-width: 640px) {
+  .filters ion-segment[scrollable] {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .filters ion-segment::-webkit-scrollbar { display: none; }
+  .filters ion-segment-button { margin-right: 6px; }
+}
+
+/* === Stili esistenti (ripresi dal tuo snippet) =================== */
+.page-tables { --padding-top: 6px; }
 .room-filter ion-segment { margin-top: 4px; }
 
 .kpi-grid {

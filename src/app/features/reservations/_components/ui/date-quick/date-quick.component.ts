@@ -1,76 +1,139 @@
-// Componente riutilizzabile: "scroller rapido giorni" (oggi → +N)
-// - Mostra header "Data" + riga "Oggi: ..."
-// - Segment scrollable di 7/14/... giorni con etichette compatte
-// - Espone (selectedChange) con YYYY-MM-DD
-//
-// Stile: standalone, import minimi, commenti espliciti.
+// src/app/features/reservations/_components/ui/date-quick/date-quick.component.ts
+// ============================================================================
+// DateQuickComponent — Picker "rapido" per giorno (oggi/ieri/domani/±1)
+// - Input:
+//     [selected]       : string ISO YYYY-MM-DD (es. "2025-11-10")
+//     [showCalendar]   : se true mostra calendario (default: true)
+//     [useNativeDate]  : se true usa <input type="date"> (default: false)
+//     [min] / [max]    : boundary opzionali (ISO YYYY-MM-DD)
+//     [title]          : opzionale, mantenuto per compat
+//     [showTodayLine]  : shim per compat proprietà legacy (non usata qui)
+//     [days]           : shim per compat proprietà legacy (non usata qui)
+// - Output:
+//     (picked)         : string ISO YYYY-MM-DD  ✅ firma invariata
+//     (selectedChange) : string ISO YYYY-MM-DD  ✅ retro-compat (non obbligatoria)
+// - UI:
+//     frecce ←/→, chip Ieri/Oggi/Domani, calendario opzionale (popover o native)
+//     + toggle runtime per switchare tra native/popover (solo FE).
+// ============================================================================
 
-import { Component, EventEmitter, Input, Output, signal, OnChanges, SimpleChanges } from '@angular/core';
-import { NgFor, NgIf } from '@angular/common';
+import { Component, EventEmitter, Input, Output, OnInit, signal } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { FormsModule } from '@angular/forms';
 import {
-  IonItem, IonLabel, IonSegment, IonSegmentButton
+  IonButton, IonChip, IonIcon, IonPopover, IonDatetime
 } from '@ionic/angular/standalone';
 
 @Component({
   standalone: true,
   selector: 'app-date-quick',
   templateUrl: './date-quick.component.html',
-  imports: [NgFor, NgIf, IonItem, IonLabel, IonSegment, IonSegmentButton],
+  styleUrls: ['./date-quick.component.scss'],
+  // 🔒 Evita mirroring automatico forward/back in qualsiasi contesto
+  host: { '[attr.dir]': "'ltr'" },
+  imports: [CommonModule, FormsModule, IonButton, IonChip, IonIcon, IonPopover, IonDatetime],
 })
-export class DateQuickComponent implements OnChanges {
-  /** Titolo sezione (default "Data") */
-  @Input() title: string = 'Data';
-  /** Mostra riga "Oggi: ..." (default true) */
-  @Input() showTodayLine: boolean = true;
-  /** Numero di giorni da mostrare (default 7: oggi → +6) */
-  @Input() days: number = 7;
-  /** Giorno selezionato in formato YYYY-MM-DD (controllato dal parent) */
-  @Input() selected: string | null = null;
+export class DateQuickComponent implements OnInit {
+  // === API ==========================================================
+  @Input()  selected: string | null = null;     // ISO "YYYY-MM-DD"
+  @Input()  showCalendar = true;
+  @Input()  useNativeDate = false;
+  @Input()  min?: string;                       // ISO "YYYY-MM-DD"
+  @Input()  max?: string;                       // ISO "YYYY-MM-DD"
+  @Input()  title?: string;                     // compat
+  @Input()  showTodayLine?: boolean;            // compat (non usata)
+  @Input()  days?: number;                      // compat (non usata)
 
-  /** Emesso quando l’utente sceglie un giorno (YYYY-MM-DD) */
-  @Output() selectedChange = new EventEmitter<string>();
+  @Output() picked = new EventEmitter<string>();          // firma "ufficiale"
+  @Output() selectedChange = new EventEmitter<string>();  // retro-compat per (selectedChange)
 
-  // Lista giorni visualizzati
-  daysList = signal<{ iso: string; weekday: string; day: string; month: string }[]>([]);
+  // === Stato locale =================================================
+  popOpen = signal<boolean>(false);
+  // Modalità UI (native vs popover). Inizializzata da @Input useNativeDate.
+  mode = signal<'native' | 'popover'>('popover');
 
-  ngOnChanges(ch: SimpleChanges): void {
-    if (ch['days']) this.daysList.set(buildNextDays(this.days));
+  ngOnInit() {
+    this.mode.set(this.useNativeDate ? 'native' : 'popover');
   }
 
-  // Label "Oggi: ..."
-  todayLabel(): string {
-    return new Intl.DateTimeFormat('it-IT', {
-      weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric'
-    }).format(new Date());
+  // === Azioni UI (chip + frecce) ===================================
+  onPrev() { this.pickOffset(-1); }
+  onNext() { this.pickOffset(+1); }
+
+  pickToday() { this.emitIso(this.todayISO()); }
+
+  pickOffset(days: number) {
+    const base = this.selected ? this.parseISO(this.selected) : new Date();
+    const d = new Date(base.getFullYear(), base.getMonth(), base.getDate() + days);
+    this.emitIso(this.toISO(d));
   }
 
-  onChange(ev: CustomEvent) {
-    const val = (ev.detail as any).value as string;
-    if (val) this.selectedChange.emit(val);
+  isSelectedOffset(days: number): boolean {
+    if (!this.selected) return false;
+    const t = this.todayStart();
+    const d = new Date(t.getFullYear(), t.getMonth(), t.getDate() + days);
+    return this.selected === this.toISO(d);
   }
-}
 
-// ============ Helpers locali ============
-
-function pad(n: number) { return String(n).padStart(2, '0'); }
-
-/** Costruisce N giorni a partire da oggi (incluso) */
-function buildNextDays(n: number) {
-  const out: { iso: string; weekday: string; day: string; month: string }[] = [];
-  const fmtWeek = new Intl.DateTimeFormat('it-IT', { weekday: 'short' });
-  const fmtDay  = new Intl.DateTimeFormat('it-IT', { day: '2-digit' });
-  const fmtMon  = new Intl.DateTimeFormat('it-IT', { month: '2-digit' });
-  const fmtIso  = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-  for (let i = 0; i < n; i++) {
-    const d = new Date();
-    d.setHours(0, 0, 0, 0);
-    d.setDate(d.getDate() + i);
-    out.push({
-      iso: fmtIso(d),
-      weekday: fmtWeek.format(d),
-      day: fmtDay.format(d),
-      month: fmtMon.format(d),
-    });
+  // === Calendario: NATIVE ==========================================
+  onNativeModelChange(val: string) {
+    if (val) this.emitIso(val);
   }
-  return out;
+
+  // === Calendario: POPOVER (IonDatetime) ===========================
+  openPopover()  { this.popOpen.set(true);  }
+  closePopover() { this.popOpen.set(false); }
+
+  onDatetimeChange(ev: CustomEvent) {
+    const raw = (ev as any)?.detail?.value;
+    const iso = this.normalizeToISODate(raw);
+    if (iso) {
+      this.emitIso(iso);
+      this.closePopover();
+    }
+  }
+
+  // === Toggle runtime ===============================================
+  toggleMode() {
+    this.mode.set(this.mode() === 'native' ? 'popover' : 'native');
+  }
+
+  // === Emit compat (picked + selectedChange) =======================
+  private emitIso(iso: string) {
+    console.log('📅 [DateQuick] picked ▶️', iso);
+    this.selected = iso;
+    this.picked.emit(iso);           // firma richiesta
+    this.selectedChange.emit(iso);   // retro-compat per (selectedChange)
+  }
+
+  // === Helper date ==================================================
+  private todayISO(): string { return this.toISO(this.todayStart()); }
+
+  private todayStart(): Date {
+    const n = new Date();
+    return new Date(n.getFullYear(), n.getMonth(), n.getDate());
+  }
+
+  private toISO(d: Date): string {
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  private parseISO(iso: string): Date {
+    const [y, m, d] = (iso || '').split('-').map(v => Number(v));
+    return new Date(y, (m || 1) - 1, d || 1);
+  }
+
+  private normalizeToISODate(v: any): string | null {
+    if (!v) return null;
+    if (typeof v === 'string') {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v; // già YYYY-MM-DD
+      const d = new Date(v);
+      if (!isNaN(d.getTime())) return this.toISO(d);
+    }
+    if (v instanceof Date && !isNaN(v.getTime())) return this.toISO(v);
+    return null;
+  }
 }

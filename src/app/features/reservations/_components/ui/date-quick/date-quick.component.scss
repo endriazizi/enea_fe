@@ -1,0 +1,123 @@
+/* src/app/features/reservations/_components/ui/date-quick/date-quick.component.scss */
+
+/* Contenitore: una sola riga, scroll orizzontale fluido su mobile */
+.date-quick {
+  display: flex;
+  align-items: center;
+  gap: 8px; /* leggermente più arioso ma compatto */
+  padding: 2px 4px 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;              /* 👈 evita wrap a 2 righe */
+  -webkit-overflow-scrolling: touch;/* inerzia iOS */
+  scrollbar-width: none;            /* Firefox */
+  border-radius: 10px;
+}
+
+/* Nascondi scrollbar su WebKit (iOS/Android Chrome) */
+.date-quick::-webkit-scrollbar { display: none; }
+
+/* Ogni elemento resta “intrinseco” (non si stringe) */
+.date-quick > * { flex: 0 0 auto; }
+
+/* Paddings compatti e allineati */
+.date-quick ion-button { --padding-start: 8px; --padding-end: 8px; height: 32px; }
+.date-quick ion-chip   { --padding-start: 10px; --padding-end: 10px; height: 32px; }
+
+/* input nativo: altezza e look coerenti con chip/bottoni */
+.native-date {
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid rgba(0,0,0,.12);
+  border-radius: 8px;
+  background: #fff;
+  font: inherit;
+  line-height: 32px;
+}
+
+/* Toggle icona: ultra-compatto */
+.mode-toggle { --padding-start: 6px; --padding-end: 6px; }
+
+/* 🔒 Blind: evita mirroring/flip sull’icona “forward” anche con Shadow DOM */
+.date-quick .next .fix-forward {
+  transform: none !important;
+}
+
+/* Se davvero usi RTL a livello app, ruota esplicitamente a destra in quel contesto */
+[dir="rtl"] .date-quick .next .fix-forward {
+  transform: rotate(180deg) !important;
+}
+
+/* Breakpoint XS/SM */
+@media (max-width: 420px) {
+  .date-quick { gap: 6px; padding: 2px 2px 6px; }
+  .btn-text { display: none; } /* “Calendario” → solo icona */
+  .native-date { max-width: 52vw; }
+}
+
+/* Breakpoint MD+ */
+@media (min-width: 992px) {
+  .date-quick { gap: 10px; }
+}
+/* src/app/features/reservations/_components/ui/date-quick/date-quick.component.scss */
+
+/* Contenitore: una sola riga, scroll orizzontale fluido su mobile */
+.date-quick {
+  display: flex;
+  align-items: center;
+  gap: 8px; /* leggermente più arioso ma compatto */
+  padding: 2px 4px 6px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  white-space: nowrap;              /* 👈 evita wrap a 2 righe */
+  -webkit-overflow-scrolling: touch;/* inerzia iOS */
+  scrollbar-width: none;            /* Firefox */
+  border-radius: 10px;
+  direction: ltr;                   /* 🔒 extra-sicurezza lato CSS */
+}
+
+/* Nascondi scrollbar su WebKit (iOS/Android Chrome) */
+.date-quick::-webkit-scrollbar { display: none; }
+
+/* Ogni elemento resta “intrinseco” (non si stringe) */
+.date-quick > * { flex: 0 0 auto; }
+
+/* Paddings compatti e allineati */
+.date-quick ion-button { --padding-start: 8px; --padding-end: 8px; height: 32px; }
+.date-quick ion-chip   { --padding-start: 10px; --padding-end: 10px; height: 32px; }
+
+/* input nativo: altezza e look coerenti con chip/bottoni */
+.native-date {
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid rgba(0,0,0,.12);
+  border-radius: 8px;
+  background: #fff;
+  font: inherit;
+  line-height: 32px;
+}
+
+/* Toggle icona: ultra-compatto */
+.mode-toggle { --padding-start: 6px; --padding-end: 6px; }
+
+/* 🔒 Blind: evita mirroring/flip sull’icona “forward” anche con Shadow DOM */
+.date-quick .next .fix-forward {
+  transform: none !important;
+}
+
+/* Se davvero usi RTL a livello app, ruota esplicitamente a destra in quel contesto */
+[dir="rtl"] .date-quick .next .fix-forward {
+  transform: rotate(180deg) !important;
+}
+
+/* Breakpoint XS/SM */
+@media (max-width: 420px) {
+  .date-quick { gap: 6px; padding: 2px 2px 6px; }
+  .btn-text { display: none; } /* “Calendario” → solo icona */
+  .native-date { max-width: 52vw; }
+}
+
+/* Breakpoint MD+ */
+@media (min-width: 992px) {
+  .date-quick { gap: 10px; }
+}

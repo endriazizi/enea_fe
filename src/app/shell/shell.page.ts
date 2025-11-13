@@ -4,6 +4,7 @@
 // ✅ Auto-close del menu ad ogni navigazione (utile su mobile).
 // ✅ Badge “in attesa” per prenotazioni come prima.
 // ✅ NUOVA VOCE di menu per "orders-list-live.page" (/orders-list).
+// ✅ NUOVA VOCE di menu "NFC / QR" (/nfc/bind) — provisioning adesivi NFC/QR.
 // Stile: commenti lunghi, log con emoji, Ionic standalone + Signals.
 
 import { Component, inject, signal, OnDestroy, OnInit } from '@angular/core';
@@ -16,7 +17,7 @@ import {
 import { Router, RouterLink, RouterLinkActive, RouterOutlet, NavigationEnd } from '@angular/router';
 import { MenuController } from '@ionic/angular';
 import { AuthService } from '../core/auth/auth.service';
-  import { ReservationsApi } from '../core/reservations/reservations.service';
+import { ReservationsApi } from '../core/reservations/reservations.service';
 import { filter, Subscription } from 'rxjs';
 
 // === Tipizzazione voce di menu (badge opzionale) ============================
@@ -51,21 +52,26 @@ export class ShellPage implements OnInit, OnDestroy {
 
   // 🔖 Voci del menù (rotta + icona)
   // NB: aggiunta nuova voce "/orders-list" per la pagina OrdersListLivePage
+  // NB: aggiunta nuova voce "/nfc/bind" per provisioning NFC/QR
   items: MenuItem[] = [
-    { label: 'Dashboard',             path: '/diagnostics',  icon: 'home' },
-    { label: 'Lista prenotazioni',    path: '/reservations', icon: 'list',       badge: true },
-    { label: 'Nuova prenotazione',    path: '/reservations/new', icon: 'add-circle' },
+    { label: 'Dashboard',             path: '/diagnostics',     icon: 'home' },
+    { label: 'Lista prenotazioni',    path: '/reservations',    icon: 'list',       badge: true },
+    { label: 'Nuova prenotazione',    path: '/reservations/new',icon: 'add-circle' },
 
-     // 👇 Nuova voce Tavoli
-    { label: 'Tavoli',                path: '/tables',       icon: 'grid' },
+    // 👇 Nuova voce Tavoli
+    { label: 'Tavoli',                path: '/tables',          icon: 'grid' },
+
+    // 👇 NUOVA VOCE — provisioning adesivi NFC/QR
+    // Icona sicura cross-platform: "scan-outline"
+    { label: 'NFC / QR',              path: '/nfc/bind',        icon: 'scan-outline' },
 
     // Ordini — tua pagina esistente
-    { label: 'Ordini (live)',         path: '/orders',       icon: 'time-outline' },
+    { label: 'Ordini (live)',         path: '/orders',          icon: 'time-outline' },
     // 👇 NUOVA VOCE — nuova pagina "orders-list-live.page"
-    { label: 'Ordini (lista live)',   path: '/orders-list',  icon: 'pulse-outline' },
+    { label: 'Ordini (lista live)',   path: '/orders-list',     icon: 'pulse-outline' },
 
-    { label: 'Nuovo ordine',          path: '/orders/new',   icon: 'create-outline' },
-    { label: 'Prenota',               path: '/prenota',      icon: 'time-outline' },
+    { label: 'Nuovo ordine',          path: '/orders/new',      icon: 'create-outline' },
+    { label: 'Prenota',               path: '/prenota',         icon: 'time-outline' },
   ];
 
   // === Badge "in attesa" =====================================================

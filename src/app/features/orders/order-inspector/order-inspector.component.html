@@ -1,0 +1,79 @@
+<!-- src/app/features/orders/order-inspector/order-inspector.component.html -->
+<ion-card class="preview-card">
+  <ion-card-header>
+    <ion-card-title class="title">
+      <span>{{ titleTable() }}</span>
+      <ion-button size="small" fill="clear" (click)="onClose()">Chiudi</ion-button>
+    </ion-card-title>
+  </ion-card-header>
+
+  <ion-card-content>
+    <div *ngIf="busy" class="loading">
+      <ion-spinner name="dots"></ion-spinner>
+      <div>Carico ordine…</div>
+    </div>
+
+    <ng-container *ngIf="!busy">
+      <!-- Lista ordini recenti (se >1) -->
+      <ion-item lines="full" *ngIf="orders.length > 1">
+        <ion-label>Ordini recenti</ion-label>
+      </ion-item>
+      <ion-list *ngIf="orders.length > 1" class="orders-list">
+        <ion-item button detail="false"
+                  *ngFor="let o of orders"
+                  [class.active]="o?.id === (picked()?.id || active?.id)"
+                  (click)="onPickOrder(o)">
+          <ion-label>
+            <div class="ord-title">
+              #{{ o?.id }} — {{ o?.scheduled_at || '—' }}
+              <span class="muted"> • {{ o?.status || 'pending' }}</span>
+            </div>
+            <div class="muted">{{ o?.customer_name || 'Cliente' }} • Tot. {{ totalOf(o) | number:'1.2-2' }}</div>
+          </ion-label>
+        </ion-item>
+      </ion-list>
+
+      <!-- Dettaglio ordine scelto (o active) -->
+      <div *ngIf="(picked() || active) as ord" class="order-detail">
+        <div class="header">
+          <div class="who">
+            <div class="customer">{{ customerLine(ord) }}</div>
+            <div class="line muted">
+              <span *ngIf="ord?.people">👥 {{ ord.people }}</span>
+              <span *ngIf="ord?.phone"> • 📞 {{ ord.phone }}</span>
+              <span *ngIf="ord?.scheduled_at"> • 🕒 {{ ord.scheduled_at | date:'EEEE dd/MM/yyyy • HH:mm' }}</span>
+            </div>
+            <div *ngIf="ord?.note" class="note">Note: {{ ord.note }}</div>
+          </div>
+          <div class="tot">
+            <div class="label">Totale</div>
+            <div class="value">{{ totalOf(ord) | number:'1.2-2' }}</div>
+          </div>
+        </div>
+
+        <ion-list class="items">
+          <ion-item *ngFor="let it of (ord.items || [])" lines="full">
+            <ion-label>
+              <div class="line">
+                <strong>{{ it.qty }} × {{ it.name }}</strong>
+                <span class="muted">prezzo: {{ it.price | number:'1.2-2' }}</span>
+              </div>
+              <div class="muted" *ngIf="(it.notes || '').trim()">NOTE: {{ it.notes }}</div>
+            </ion-label>
+          </ion-item>
+        </ion-list>
+
+        <div class="preview-actions">
+          <ion-button size="small" (click)="onOpenBuilder()">Apri nel builder</ion-button>
+          <ion-button size="small" fill="outline" (click)="onPrintBill()">Stampa conto</ion-button>
+          <ion-button size="small" fill="outline" (click)="onPrintComanda('pizzeria')">Comanda Pizzeria</ion-button>
+          <ion-button size="small" fill="outline" (click)="onPrintComanda('cucina')">Comanda Cucina</ion-button>
+        </div>
+      </div>
+
+      <div *ngIf="!active && orders.length === 0" class="empty">
+        Nessun ordine recente per questo tavolo.
+      </div>
+    </ng-container>
+  </ion-card-content>
+</ion-card>

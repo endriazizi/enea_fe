@@ -1,8 +1,8 @@
 // src/app/app.config.ts
 // ============================================================================
 // Router & Providers
-// - Pubbliche: /prenota, /prenota/grazie
-// - Admin: /orders (live), /orders/new, /orders-list (lista live nuova)
+// - Pubbliche: /prenota, /prenota/grazie, /t/:token (entry NFC), /nfc/error
+// - Admin: /orders (live), /orders/new, /orders-list (lista live nuova), /nfc/bind
 // ============================================================================
 
 import { ApplicationConfig, isDevMode, APP_INITIALIZER, LOCALE_ID } from '@angular/core';
@@ -34,14 +34,15 @@ registerAppIcons();
 const pick = <T = any>(mod: any, named: string): T => (mod?.[named] ?? mod?.default) as T;
 
 const routes: Routes = [
+  // --- PUBBLICHE (fuori dalla Shell) ---------------------------------
   { path: 'login', component: LoginPage },
 
-  { path: 'logout',
+  {
+    path: 'logout',
     loadComponent: () =>
       import('./features/auth/logout.page').then(m => pick(m, 'LogoutPage'))
   },
 
-  // pubblico
   {
     path: 'prenota',
     loadComponent: () =>
@@ -53,6 +54,19 @@ const routes: Routes = [
       import('./features/public-booking/thank-you.page').then(m => pick(m, 'ThankYouPage'))
   },
 
+  // 👉 NFC entry pubblica + pagina errore (sempre accessibili)
+  {
+    path: 't/:token',
+    loadComponent: () =>
+      import('./features/nfc/nfc-entry.page').then(m => pick(m, 'NfcEntryPage'))
+  },
+  {
+    path: 'nfc/error',
+    loadComponent: () =>
+      import('./features/nfc/nfc-error.page').then(m => pick(m, 'NfcErrorPage'))
+  },
+
+  // --- SHELL AUTENTICATA --------------------------------------------
   {
     path: '',
     component: ShellPage,
@@ -60,11 +74,11 @@ const routes: Routes = [
       { path: '', pathMatch: 'full', redirectTo: 'diagnostics' },
       { path: 'diagnostics', component: DiagnosticsPage },
 
-      
-      // 👉 NUOVA ROTTA
+      // 👉 NUOVA ROTTA (tavoli)
       {
         path: 'tables',
-        loadComponent: () => import('./features/tables/tables-list.page').then(m => pick(m, 'TablesListPage')),
+        loadComponent: () =>
+          import('./features/tables/tables-list.page').then(m => pick(m, 'TablesListPage')),
         canActivate: [authGuard]
       },
 
@@ -118,6 +132,14 @@ const routes: Routes = [
         loadComponent: () =>
           import('./features/orders/orders-list-live.page').then(m => pick(m, 'OrdersListLivePage')),
         canActivate: [authGuard]
+      },
+
+      // 👉 NFC provisioning (admin)
+      {
+        path: 'nfc/bind',
+        canActivate: [authGuard],
+        loadComponent: () =>
+          import('./features/nfc/nfc-bind.page').then(m => pick(m, 'NfcBindPage'))
       },
 
       { path: '**', redirectTo: 'diagnostics' }

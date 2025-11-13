@@ -10,25 +10,32 @@
 // - 🆕 Check-in (disabilitazione + toast + reload)  ✅ FIX: considera checkin_at
 // - 🆕 Check-out + Pulizia 5:00 (solo FE): countdown mm:ss e "Libera ora"
 // - 🆕 Ordine dal tavolo → order-builder (prefill se c'è prenotazione)
+// - 🆕 Preview ordine (split pane desktop / modal mobile) + azioni builder/stampa/comanda
 // ============================================================================
 
 import {
   Component, effect, inject, signal, computed, OnInit, OnDestroy, EffectRef
 } from '@angular/core';
-import { CommonModule, NgFor, NgIf } from '@angular/common';
+import { CommonModule, NgFor, NgIf, DatePipe } from '@angular/common';
 import {
   IonHeader, IonToolbar, IonTitle, IonButtons, IonButton,
   IonContent, IonGrid, IonRow, IonCol, IonCard, IonCardHeader,
   IonCardTitle, IonCardContent, IonBadge, IonItem, IonNote,
-  IonSegment, IonSegmentButton, IonSearchbar, IonSpinner
+  IonSegment, IonSegmentButton, IonSearchbar, IonSpinner,
+  IonModal, IonChip, IonIcon, IonLabel
 } from '@ionic/angular/standalone';
+import { isPlatform } from '@ionic/angular';
 import { Router, RouterLink } from '@angular/router';
+import { HttpClient } from '@angular/common/http';
 
 import { ReservationsApi, Room, Table, Reservation } from '../../core/reservations/reservations.service';
 import { DateQuickComponent } from '../reservations/_components/ui/date-quick/date-quick.component';
 
 import { ActionSheetController, ToastController, ModalController } from '@ionic/angular';
 import { MoveReservationModalComponent } from '../reservations/_components/move-reservation.modal/move-reservation.modal';
+
+// ⬇️ nostro inspector presentazionale (pane/modal) usato nel template
+import { OrderInspectorComponent } from '../orders/order-inspector/order-inspector.component';
 
 type TableState = 'free'|'upcoming'|'busy'|'cleaning';
 
@@ -45,18 +52,36 @@ export type TableCard = {
   cleaningRemainingSec?: number;
 };
 
+// === Tipi leggeri per il Preview ordine (solo ciò che serve a UI) ===
+type PreviewItem = { id?:number; name:string; qty:number; price:number; notes?:string };
+type PreviewOrder = {
+  id:number;
+  table_id?:number;
+  reservation_id?:number|null;
+  customer_name?:string;
+  people?:number;
+  phone?:string;
+  scheduled_at?:string;
+  note?:string;
+  total:number;
+  items: PreviewItem[];
+};
+
 @Component({
   standalone: true,
   selector: 'app-tables-list',
   templateUrl: './tables-list.page.html',
   styleUrls: ['./tables-list.page.scss'],
   imports: [
-    CommonModule, NgFor, NgIf, RouterLink,
+    CommonModule, NgFor, NgIf, RouterLink, DatePipe,
     IonHeader, IonToolbar, IonTitle, IonButtons, IonButton,
     IonContent, IonGrid, IonRow, IonCol, IonCard, IonCardHeader,
     IonCardTitle, IonCardContent, IonBadge, IonItem, IonNote,
     IonSegment, IonSegmentButton, IonSearchbar, IonSpinner,
-    DateQuickComponent
+    // 👇 per gli elementi usati in template:
+    IonModal, IonChip, IonIcon, IonLabel,
+    // 👇 date quick + inspector
+    DateQuickComponent, OrderInspectorComponent
   ],
   providers: [ModalController, ActionSheetController, ToastController],
 })
@@ -64,12 +89,13 @@ export class TablesListPage implements OnInit, OnDestroy {
   // === DI ===========================================================
   private api    = inject(ReservationsApi);
   private router = inject(Router);
+  private http   = inject(HttpClient);
 
   private actionSheet = inject(ActionSheetController);
   private toast       = inject(ToastController);
   private modal       = inject(ModalController);
 
-  // === Stato UI =====================================================
+  // === Stato UI (lista + filtri) ====================================
   loading      = signal(true);
   roomsSig     = signal<Room[]>([]);
   tablesRawSig = signal<(Table & { room_name?: string })[]>([]);
@@ -89,7 +115,22 @@ export class TablesListPage implements OnInit, OnDestroy {
   checkInLoadingId  = signal<number|null>(null);
   checkOutLoadingId = signal<number|null>(null);
 
-  // KPI
+  // === Viewport (split vs modal) ====================================
+  private vp = signal<{w:number;h:number}>({ w: window.innerWidth, h: window.innerHeight });
+  private onResize = () => this.vp.set({ w: window.innerWidth, h: window.innerHeight });
+  isDesktop = () => this.vp().w >= 992; // usato nel template come funzione
+
+  // === Piattaforma (mode dinamico per i segment) =====================
+  isIOS = isPlatform('ios');
+
+  // === Preview ordine (split panel + modal) =========================
+  previewOpen   = signal<boolean>(false);
+  previewTable  = signal<TableCard|null>(null);
+  previewBusy   = signal<boolean>(false);
+  previewList   = signal<PreviewOrder[]>([]);      // ordini recenti del tavolo (se >1)
+  previewActive = signal<PreviewOrder|null>(null); // quello selezionato/attivo
+
+  // === KPI ==========================================================
   private sumBy = <T>(arr: T[], pick: (x:T)=>number) => (arr || []).reduce((a,c)=>a+(+pick(c)||0),0);
 
   kpiPeopleTotal   = computed(() => this.sumBy(this.reservationsTodaySig(), r => Number(r.party_size || 0)));
@@ -118,8 +159,9 @@ export class TablesListPage implements OnInit, OnDestroy {
   ngOnInit() {
     this.reload();
     this.timerId = setInterval(() => this.tick.update(v => v + 1), 1000);
+    window.addEventListener('resize', this.onResize, { passive: true });
 
-    // hook socket best-effort
+    // hook socket best-effort (pulizia override via evento)
     try {
       const w: any = (window as any);
       const socket = w?.__tables_socket || w?.socket || null;
@@ -144,8 +186,10 @@ export class TablesListPage implements OnInit, OnDestroy {
   ngOnDestroy() {
     if (this.timerId) clearInterval(this.timerId);
     this.logFiltersEffect?.destroy();
+    window.removeEventListener('resize', this.onResize);
   }
 
+  // === Picker giorno ================================================
   selectedDayForPicker = () => this.dayISO();
   onQuickFilterDay = (iso: string) => { this.dayISO.set(iso); this.reload(); };
 
@@ -393,6 +437,81 @@ export class TablesListPage implements OnInit, OnDestroy {
     }
   }
 
+  // === Preview ordine: metodi ======================================
+  onOpenPreview(t: TableCard) {
+    // se clicco la stessa card con pannello già aperto → toggle close
+    const same = this.previewTable()?.id === t.id;
+    if (same && this.previewOpen()) { this.onClosePreview(); return; }
+    this.previewTable.set(t);
+    this.previewOpen.set(true);
+    this.loadOrdersForTable(t).catch(err => console.warn('⚠️ [TablesList] preview load KO', err));
+  }
+
+  onClosePreview() {
+    this.previewOpen.set(false);
+    this.previewActive.set(null);
+    this.previewList.set([]);
+  }
+
+  async loadOrdersForTable(t: TableCard) {
+    try {
+      this.previewBusy.set(true);
+      // 🪄 Fallback “povero”: prova a leggere gli ordini recenti del tavolo nelle ultime 6 ore
+      // Endpoint atteso: GET /api/orders?table_id=...&hours=6  (se non esiste → catch)
+      const q = new URLSearchParams({ table_id: String(t.id), hours: '6' }).toString();
+      const data = await this.http.get<any[]>(`/api/orders?${q}`).toPromise();
+
+      // Normalizzo al formato PreviewOrder
+      const list: PreviewOrder[] = (data || []).map((o: any) => ({
+        id: Number(o.id),
+        table_id: Number(o.table_id || t.id),
+        reservation_id: o.reservation_id ?? null,
+        customer_name: o.customer_name || o.customer_fullname || '',
+        people: Number(o.people || o.covers || 0) || undefined,
+        phone: o.phone || '',
+        scheduled_at: o.created_at || o.updated_at || o.scheduled_at || null,
+        note: o.note || '',
+        total: toNum(o.total || 0),
+        items: (o.items || []).map((it: any) => ({
+          id: it.id, name: String(it.name || it.title || 'ITEM'),
+          qty: toNum(it.qty || 1, 1), price: toNum(it.price || 0),
+          notes: (it.notes || it.note || '').trim() || undefined
+        }))
+      }));
+
+      this.previewList.set(list);
+      this.previewActive.set(list[0] || null);
+    } catch (e) {
+      console.warn('⚠️ [TablesList] /api/orders non disponibile, uso stato vuoto', e);
+      this.previewList.set([]);
+      this.previewActive.set(null);
+    } finally {
+      this.previewBusy.set(false);
+    }
+  }
+
+  openInBuilderFromPreview() {
+    const tbl = this.previewTable();
+    const ord = this.previewActive();
+    if (!tbl) return;
+    const queryParams: any = { table_id: tbl.id, room_id: tbl.room_id };
+    if (ord?.reservation_id) queryParams.reservation_id = ord.reservation_id;
+    console.log('🧱 [TablesList] Apri nel builder ▶️', queryParams);
+    this.router.navigate(['/orders/new'], { queryParams });
+  }
+
+  printBillFromPreview() {
+    const ord = this.previewActive();
+    console.log('🧾 [TablesList] Stampa CONTO ▶️', ord?.id || '(nessun ordine)');
+    // TODO: invoca la tua API stampa conto se già disponibile
+  }
+
+  printComandaFromPreview(center: 'pizzeria'|'cucina') {
+    const ord = this.previewActive();
+    console.log(`🍕 [TablesList] COMANDA ▶️ ${center.toUpperCase()}`, ord?.id || '(nessun ordine)');
+    // TODO: invoca la tua API comanda con centro di produzione
+  }
+
   // === Util =========================================================
   trackByTableId = (_: number, t: TableCard) => t.id;
 
@@ -461,6 +580,8 @@ function decorateResNext(r: any) {
     covers: Number(r.party_size || r.covers || 0),
     checkin_at: r.checkin_at || null, checkout_at: r.checkout_at || null };
 }
+
+function toNum(x: any, df = 0) { const n = Number(x); return Number.isFinite(n) ? n : df; }
 
 // 👉 default export per compat con import lazy nel router
 export default TablesListPage;

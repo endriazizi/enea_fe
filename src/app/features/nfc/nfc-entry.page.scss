@@ -1,0 +1,9 @@
+/* src/app/features/nfc/nfc-entry.page.scss */
+.center {
+  min-height: 60vh;
+  display: grid;
+  place-items: center;
+  text-align: center;
+}
+.msg h2 { margin: 8px 0 4px; }
+.msg p  { margin: 0; opacity: .9; }

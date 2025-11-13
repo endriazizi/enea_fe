@@ -1,20 +1,91 @@
-<!-- Header titolo + riga "Oggi: ..." -->
-<ion-item lines="none">
-  <ion-label>
-    <div style="font-weight:600;">{{ title }}</div>
-    <div *ngIf="showTodayLine" style="font-size:12px; opacity:.75;">Oggi: {{ todayLabel() }}</div>
-  </ion-label>
-</ion-item>
+<!-- src/app/features/reservations/_components/ui/date-quick/date-quick.component.html -->
+<!-- =========================================================================
+     UI minimale "rapido": frecce ±1 giorno + chip Ieri/Oggi/Domani.
+     Calendario opzionale:
+       - modalità "native": <input type="date">
+       - modalità "popover": IonPopover + IonDatetime.
+     Toggle runtime tra native/popover (solo FE).
+     Responsive (iOS/Android): una sola riga, scroll orizzontale, padding compatti.
+     L'output emesso è SEMPRE una stringa ISO "YYYY-MM-DD".
+     ========================================================================= -->
+<div class="date-quick" role="toolbar" aria-label="Selettore giorno rapido" dir="ltr">
+  <!-- Freccia -1 -->
+  <ion-button size="small" fill="outline" (click)="onPrev()" aria-label="Giorno precedente">
+    <ion-icon name="chevron-back-outline"></ion-icon>
+  </ion-button>
 
-<!-- Segment giorni scrollabile -->
-<div style="padding: 0 8px 8px;">
-  <ion-segment [value]="selected || daysList()[0]?.iso" (ionChange)="onChange($event)" mode="md" scrollable="true">
-    <ion-segment-button *ngFor="let d of daysList()" [value]="d.iso">
-      <div style="display:flex;flex-direction:column;align-items:center;line-height:1;">
-        <small style="opacity:.8">{{ d.weekday }}</small>
-        <b style="font-size:18px;">{{ d.day }}</b>
-        <small style="opacity:.6">{{ d.month }}</small>
-      </div>
-    </ion-segment-button>
-  </ion-segment>
+  <!-- Chip veloci -->
+  <ion-chip [outline]="!isSelectedOffset(-1)" [color]="isSelectedOffset(-1) ? 'primary' : undefined" (click)="pickOffset(-1)">
+    Ieri
+  </ion-chip>
+
+  <ion-chip [outline]="true" color="primary" (click)="pickToday()">
+    Oggi
+  </ion-chip>
+
+  <ion-chip [outline]="!isSelectedOffset(+1)" [color]="isSelectedOffset(+1) ? 'primary' : undefined" (click)="pickOffset(+1)">
+    Domani
+  </ion-chip>
+
+  <!-- Calendario opzionale -->
+  <ng-container *ngIf="showCalendar">
+    <!-- Modalità NATIVE -->
+    <input
+      *ngIf="mode() === 'native'; else popoverTpl"
+      class="native-date"
+      type="date"
+      [ngModel]="selected || ''"
+      (ngModelChange)="onNativeModelChange($event)"
+      [attr.min]="min || null"
+      [attr.max]="max || null"
+      aria-label="Seleziona data" />
+
+    <!-- Modalità POPOVER -->
+    <ng-template #popoverTpl>
+      <ion-button size="small" fill="outline" (click)="openPopover()" aria-label="Apri calendario">
+        <ion-icon name="calendar-outline"></ion-icon>
+        <span class="btn-text ion-hide-sm-down">Calendario</span>
+      </ion-button>
+      <ion-popover [isOpen]="popOpen()" (didDismiss)="closePopover()">
+        <ng-template>
+          <ion-datetime
+            presentation="date"
+            [value]="selected || null"
+            [min]="min || undefined"
+            [max]="max || undefined"
+            (ionChange)="onDatetimeChange($event)"
+            (ionCancel)="closePopover()">
+          </ion-datetime>
+        </ng-template>
+      </ion-popover>
+    </ng-template>
+
+    <!-- Toggle runtime native/popover (solo FE) -->
+    <ion-button
+      size="small"
+      fill="clear"
+      class="mode-toggle"
+      (click)="toggleMode()"
+      [title]="mode() === 'native' ? 'Passa a calendario (popover)' : 'Passa a input nativo'"
+      [attr.aria-label]="mode() === 'native' ? 'Passa a calendario (popover)' : 'Passa a input nativo'">
+      <!-- 👇 icona chiara e non ambigua: telefono = nativo, calendario = popover -->
+      <ion-icon [name]="mode() === 'native' ? 'phone-portrait-outline' : 'calendar-outline'"></ion-icon>
+    </ion-button>
+  </ng-container>
+
+  <!-- Freccia +1 -->
+  <ion-button
+    size="small"
+    fill="outline"
+    (click)="onNext()"
+    aria-label="Giorno successivo"
+    class="next">
+    <!-- 🔒 Forzo SEMPRE a destra: disabilito flip RTL e annullo qualunque transform -->
+    <ion-icon
+      name="chevron-forward-outline"
+      class="fix-forward"
+      flip-rtl="false"
+      style="transform: none;">
+    </ion-icon>
+  </ion-button>
 </div>

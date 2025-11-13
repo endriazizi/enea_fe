@@ -1,147 +1,168 @@
 <!-- src/app/features/tables/tables-list.page.html -->
 <ion-header>
   <ion-toolbar>
-    <ion-title>Tavoli (Oggi)</ion-title>
+    <ion-title>Admin</ion-title>
     <ion-buttons slot="end">
-      <ion-button routerLink="/reservations/new" routerDirection="forward">Nuova</ion-button>
+      <ion-button routerLink="/orders/new">Nuovo ordine</ion-button>
     </ion-buttons>
   </ion-toolbar>
 </ion-header>
 
-<ion-content class="ion-padding page-tables">
+<ion-content>
+  <!-- Layout SPLIT: a sinistra tavoli, a destra preview (solo desktop) -->
+  <div class="split-layout">
 
-  <!-- Quick day picker -->
-  <app-date-quick
-    [title]="'Giorno rapido'"
-    [showTodayLine]="false"
-    [days]="7"
-    [selected]="selectedDayForPicker()"
-    (selectedChange)="onQuickFilterDay($event)">
-  </app-date-quick>
+    <!-- ===== COLONNA SINISTRA: Tavoli ===== -->
+    <div class="left-col">
 
-  <!-- Filtri -->
-  <div class="filters">
-    <ion-segment [value]="filterState()" (ionChange)="onFilterChange($event)">
-      <ion-segment-button value="all">Tutti</ion-segment-button>
-      <ion-segment-button value="free">Liberi</ion-segment-button>
-      <ion-segment-button value="upcoming">In arrivo</ion-segment-button>
-      <ion-segment-button value="busy">Occupati</ion-segment-button>
-      <ion-segment-button value="cleaning">Pulizia</ion-segment-button>
-    </ion-segment>
+      <!-- Data (UI) -->
+      <div class="date-ui">
+        <ion-chip color="primary" [outline]="true">
+          <ion-icon name="calendar-outline"></ion-icon>
+          <ion-label>{{ selectedDayForPicker() | date:'EEEE dd/MM/yyyy' }}</ion-label>
+        </ion-chip>
 
-    <div class="room-filter">
-      <ion-segment [value]="filterRoomId()" (ionChange)="onRoomChange($event)">
-        <ion-segment-button *ngFor="let r of roomOptions()" [value]="r.id">{{ r.name }}</ion-segment-button>
-      </ion-segment>
+        <!-- Quick day picker -->
+        <!-- 🔁 Evento ora emette string ISO direttamente -->
+        <app-date-quick
+          [selected]="selectedDayForPicker()"
+          (picked)="onQuickFilterDay($event)">
+        </app-date-quick>
+      </div>
+
+      <!-- Filtri rapidi -->
+      <div class="filters">
+        <!-- Stato: stile pill + scrollabile, mode dinamico iOS/Android in 1 riga -->
+        <ion-segment
+          [mode]="isIOS ? 'ios' : 'md'"
+          scrollable="true"
+          [value]="filterState()"
+          (ionChange)="onFilterChange($event)">
+          <ion-segment-button value="all">Tutti</ion-segment-button>
+          <ion-segment-button value="free">Liberi</ion-segment-button>
+          <ion-segment-button value="upcoming">Arrivo</ion-segment-button>
+          <ion-segment-button value="busy">Occupati</ion-segment-button>
+          <ion-segment-button value="cleaning">Pulizia</ion-segment-button>
+        </ion-segment>
+
+        <div class="row2">
+          <ion-searchbar
+            placeholder="Cerca"
+            [value]="filterText()"
+            (ionInput)="onSearchChange($event)">
+          </ion-searchbar>
+
+          <!-- Sale: pill + scrollabile, mode dinamico iOS/Android in 1 riga -->
+          <ion-segment
+            [mode]="isIOS ? 'ios' : 'md'"
+            scrollable="true"
+            [value]="filterRoomId()"
+            (ionChange)="onRoomChange($event)">
+            <ion-segment-button *ngFor="let r of roomOptions()" [value]="r.id">
+              {{ r.name }}
+            </ion-segment-button>
+          </ion-segment>
+        </div>
+      </div>
+
+      <!-- KPI -->
+      <div class="kpi">
+        <ion-chip color="primary">👥 {{ kpiPeopleTotal() }} tot</ion-chip>
+        <ion-chip color="success">🧑‍🍳 IN SALA {{ kpiPeopleCheckIn() }}</ion-chip>
+        <ion-chip color="warning">🟡 {{ kpiTablesUpcoming() }}</ion-chip>
+        <ion-chip color="danger">🔴 {{ kpiTablesBusy() }}</ion-chip>
+        <ion-chip color="tertiary">🟢 {{ kpiTablesFree() }} ({{ kpiFreeSeatsTotal() }} posti: {{ kpiFreeSeatsDist() }})</ion-chip>
+      </div>
+
+      <!-- Grid tavoli -->
+      <ion-grid>
+        <ion-row>
+          <ion-col size="12" size-md="6" size-lg="4" *ngFor="let t of tablesFilteredSig(); trackBy: trackByTableId">
+            <ion-card class="table-card" (click)="onOpenPreview(t)">
+              <ion-card-header>
+                <ion-card-title class="title">
+                  <span>TAV. {{ t.number }} • {{ t.room_name }}</span>
+                  <ion-badge [color]="t.state==='busy' ? 'danger' : (t.state==='upcoming' ? 'warning' : (t.state==='free' ? 'success' : 'primary'))">
+                    {{ t.state | uppercase }}
+                  </ion-badge>
+                </ion-card-title>
+              </ion-card-header>
+
+              <ion-card-content>
+                <div class="meta">
+                  <div *ngIf="t.resNow; else whenFree">
+                    <ion-icon name="time-outline"></ion-icon>
+                    {{ t.resNow?.start_at | date:'HH:mm' }}–{{ t.resNow?.end_at | date:'HH:mm' }}
+                    • <ion-icon name="people-outline"></ion-icon> {{ t.resNow?.covers || '?' }}
+                    <span class="name">• {{ t.resNow?.customer_name }}</span>
+                  </div>
+                  <ng-template #whenFree>
+                    <div *ngIf="t.resNext; else noRes">
+                      <ion-icon name="navigate-outline"></ion-icon>
+                      Arrivo {{ t.resNext?.start_at | date:'HH:mm' }}
+                      • {{ t.resNext?.customer_name }}
+                    </div>
+                    <ng-template #noRes>
+                      <div class="free">Capienza: {{ t.capacity }}</div>
+                    </ng-template>
+                  </ng-template>
+
+                  <div *ngIf="t.state==='cleaning'">
+                    🔵 Pulizia: {{ formatMMSS(t.cleaningRemainingSec) }}
+                  </div>
+                </div>
+
+                <!-- Bottoni (stopPropagation per non aprire preview se clicco) -->
+                <div class="actions" (click)="$event.stopPropagation()">
+                  <ion-button size="small" fill="outline" (click)="openDetails(t)">Dettagli</ion-button>
+                  <ion-button size="small" (click)="startOrder(t)">Ordine</ion-button>
+                  <ion-button size="small" fill="outline" (click)="openActions(t)">…</ion-button>
+                </div>
+              </ion-card-content>
+            </ion-card>
+          </ion-col>
+        </ion-row>
+      </ion-grid>
+
     </div>
 
-    <ion-searchbar placeholder="Cerca per nome, tavolo…" (ionInput)="onSearchChange($event)"></ion-searchbar>
+    <!-- ===== COLONNA DESTRA: Order Inspector (solo desktop) ===== -->
+    <aside class="right-col" *ngIf="isDesktop() && previewOpen()">
+      <app-order-inspector
+        [table]="previewTable()"
+        [orders]="previewList()"
+        [active]="previewActive()"
+        [busy]="previewBusy()"
+        (openBuilder)="openInBuilderFromPreview()"
+        (printBill)="printBillFromPreview()"
+        (printComanda)="printComandaFromPreview($event)"
+        (close)="onClosePreview()">
+      </app-order-inspector>
+    </aside>
   </div>
 
-  <!-- KPI (colpo d'occhio) -->
-  <div class="kpi-grid" *ngIf="!loading()">
-    <div class="kpi">
-      <div class="kpi-title">👥 Prenotati oggi</div>
-      <div class="kpi-value">{{ kpiPeopleTotal() }}</div>
-    </div>
-    <div class="kpi">
-      <div class="kpi-title">✅ Check-in ora</div>
-      <div class="kpi-value">{{ kpiPeopleCheckIn() }}</div>
-    </div>
-    <div class="kpi">
-      <div class="kpi-title">🔴 Occupati</div>
-      <div class="kpi-value">{{ kpiTablesBusy() }}</div>
-    </div>
-    <div class="kpi">
-      <div class="kpi-title">🟢 Liberi</div>
-      <div class="kpi-value">{{ kpiTablesFree() }}</div>
-    </div>
-    <div class="kpi">
-      <div class="kpi-title">🪑 Posti liberi</div>
-      <div class="kpi-value">{{ kpiFreeSeatsTotal() }}</div>
-      <ion-note *ngIf="kpiFreeSeatsDist()" class="kpi-note">{{ kpiFreeSeatsDist() }}</ion-note>
-    </div>
-  </div>
+  <!-- ===== MODAL MOBILE: stesso contenuto del pannello ===== -->
+  <ion-modal [isOpen]="!isDesktop() && previewOpen()">
+    <ng-template>
+      <ion-header>
+        <ion-toolbar>
+          <ion-title>{{ previewTable() ? ('Tav. ' + previewTable()?.number + ' • ' + previewTable()?.room_name) : 'Ordine' }}</ion-title>
+          <ion-buttons slot="end"><ion-button (click)="onClosePreview()">Chiudi</ion-button></ion-buttons>
+        </ion-toolbar>
+      </ion-header>
 
-  <div class="loading" *ngIf="loading()">
-    <ion-spinner></ion-spinner>
-  </div>
-
-  <ion-grid *ngIf="!loading()">
-    <ion-row>
-      <ion-col size="12" size-sm="6" size-md="4" size-lg="3"
-               *ngFor="let t of tablesFilteredSig(); trackBy: trackByTableId">
-
-        <ion-card [class.free]="t.state==='free'"
-                  [class.upcoming]="t.state==='upcoming'"
-                  [class.busy]="t.state==='busy'"
-                  [class.cleaning]="t.state==='cleaning'"
-                  (click)="openActions(t)">
-
-          <ion-card-header>
-            <ion-card-title>
-              TAV. {{t.number}} • {{t.room_name}}
-              <ion-badge *ngIf="t.state==='free'">LIBERO</ion-badge>
-              <ion-badge color="warning" *ngIf="t.state==='upcoming'">IN ARRIVO</ion-badge>
-              <ion-badge color="danger" *ngIf="t.state==='busy'">OCCUPATO</ion-badge>
-              <ion-badge color="primary" *ngIf="t.state==='cleaning'">
-                PULIZIA {{ formatMMSS(t.cleaningRemainingSec) }}
-              </ion-badge>
-            </ion-card-title>
-
-            <ion-note *ngIf="t.resNow">
-              🕒 {{ t.resNow.start_at | date:'HH:mm' }}–{{ t.resNow.end_at | date:'HH:mm' }}
-              • {{ t.resNow.customer_name }} • 👥 {{ t.resNow.covers }}
-              <span *ngIf="t.resNow.kids"> • 👶 {{ t.resNow.kids }}</span>
-            </ion-note>
-
-            <ion-note *ngIf="!t.resNow && t.resNext">
-              ⏭ {{ t.resNext.start_at | date:'HH:mm' }}–{{ t.resNext.end_at | date:'HH:mm' }}
-              • {{ t.resNext.customer_name }} • 👥 {{ t.resNext.covers }}
-            </ion-note>
-
-            <ion-note *ngIf="t.state==='free' && !t.resNext">Capienza: {{ t.capacity }}</ion-note>
-          </ion-card-header>
-
-          <ion-card-content *ngIf="t.resNow?.notes">
-            🏷️ {{ t.resNow?.notes }}
-          </ion-card-content>
-
-          <ion-item lines="none" class="actions" (click)="$event.stopPropagation()">
-            <ion-button size="small" fill="outline" (click)="openDetails(t)">Dettagli</ion-button>
-
-            <!-- 🆕 Avvio ordine dal tavolo -->
-            <ion-button size="small" color="tertiary" (click)="startOrder(t)">Ordine</ion-button>
-
-            <ion-button size="small"
-                        *ngIf="t.state==='upcoming'"
-                        [disabled]="checkInLoadingId()===t.resNext?.id"
-                        (click)="checkIn(t)">
-              <ion-spinner name="dots" *ngIf="checkInLoadingId()===t.resNext?.id" style="transform:scale(.7)"></ion-spinner>
-              <span *ngIf="checkInLoadingId()!==t.resNext?.id">Check-in</span>
-            </ion-button>
-
-            <ion-button size="small"
-                        *ngIf="t.state==='busy'"
-                        [disabled]="checkOutLoadingId()===t.resNow?.id"
-                        (click)="checkOut(t)">
-              <ion-spinner name="dots" *ngIf="checkOutLoadingId()===t.resNow?.id" style="transform:scale(.7)"></ion-spinner>
-              <span *ngIf="checkOutLoadingId()!==t.resNow?.id">Chiudi tavolo</span>
-            </ion-button>
-
-            <ion-button size="small" *ngIf="t.state==='busy'" (click)="printKitchen(t)">Stampa</ion-button>
-
-            <ion-button size="small" *ngIf="t.state==='cleaning'" (click)="freeNow(t)">
-              Libera ora
-            </ion-button>
-
-            <ion-button size="small" *ngIf="t.state==='free'" color="success" (click)="newReservation(t)">Nuova</ion-button>
-          </ion-item>
-
-        </ion-card>
-
-      </ion-col>
-    </ion-row>
-  </ion-grid>
-
+      <ion-content class="ion-padding">
+        <app-order-inspector
+          [table]="previewTable()"
+          [orders]="previewList()"
+          [active]="previewActive()"
+          [busy]="previewBusy()"
+          (openBuilder)="openInBuilderFromPreview()"
+          (printBill)="printBillFromPreview()"
+          (printComanda)="printComandaFromPreview($event)"
+          (close)="onClosePreview()">
+        </app-order-inspector>
+      </ion-content>
+    </ng-template>
+  </ion-modal>
 </ion-content>

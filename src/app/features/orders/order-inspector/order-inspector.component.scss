@@ -1,0 +1,20 @@
+/* src/app/features/orders/order-inspector/order-inspector.component.scss */
+.preview-card { --padding-start: 0; --padding-end: 0; }
+.title {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  font-weight: 600;
+}
+.loading { display:flex; align-items:center; gap:8px; padding: 12px 8px; }
+.orders-list .active { --background: rgba(0,0,0,.04); }
+.order-detail .header {
+  display:flex; align-items:flex-start; justify-content:space-between; gap: 12px;
+  padding: 8px 0 12px;
+}
+.order-detail .who .customer { font-weight: 600; }
+.order-detail .who .line { opacity: .75; font-size: .9rem; }
+.order-detail .who .note { margin-top: 6px; opacity: .8; font-style: italic; }
+.order-detail .tot .label { font-size: .8rem; opacity: .7; }
+.order-detail .tot .value { font-size: 1.2rem; font-weight: 700; }
+.muted { opacity: .7; }
+.preview-actions { display:flex; flex-wrap:wrap; gap: 8px; margin-top: 12px; }
+.empty { opacity: .7; padding: 8px 0; }

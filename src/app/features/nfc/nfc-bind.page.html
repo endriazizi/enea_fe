@@ -1,0 +1,73 @@
+<!-- src/app/features/nfc/nfc-bind.page.html -->
+<ion-header>
+  <ion-toolbar>
+    <ion-title>Configurazione adesivo</ion-title>
+  </ion-toolbar>
+</ion-header>
+
+<ion-content class="ion-padding">
+  <ion-card>
+    <ion-card-header>
+      <ion-card-title>URL pubblico</ion-card-title>
+    </ion-card-header>
+
+    <ion-card-content>
+      <!-- Ricarica (sale/tavoli) -->
+      <ion-button size="small" fill="outline" (click)="loadRooms(); loadTables()">
+        <ion-icon slot="start" name="scan-outline"></ion-icon>
+        Ricarica tavoli
+      </ion-button>
+
+      <!-- Sala -->
+      <ion-item lines="inset" style="margin-top:12px;">
+        <ion-label position="stacked">Sala</ion-label>
+        <ion-select interface="popover"
+                    [value]="roomId()"
+                    (ionChange)="roomId.set($any($event).detail.value); loadTables()">
+          <ion-select-option *ngFor="let r of rooms()" [value]="r.id">
+            {{ r.name || ('Sala ' + r.id) }}
+          </ion-select-option>
+        </ion-select>
+      </ion-item>
+
+      <!-- Tavolo -->
+      <ion-item lines="inset">
+        <ion-label position="stacked">Tavolo</ion-label>
+        <ion-select interface="popover"
+                    [value]="tableId()"
+                    (ionChange)="tableId.set($any($event).detail.value)">
+          <ion-select-option *ngFor="let t of tables()" [value]="t.id">
+            {{ t.label || ('Tavolo ' + t.table_number) }}
+          </ion-select-option>
+        </ion-select>
+      </ion-item>
+
+      <!-- Nota -->
+      <ion-item lines="none">
+        <ion-label position="stacked">Nota (opzionale)</ion-label>
+        <ion-textarea placeholder="Es. Sala Interna — Tavolo 1"
+                      [value]="note()"
+                      (ionInput)="note.set(($any($event).detail?.value ?? ''))">
+        </ion-textarea>
+      </ion-item>
+
+      <!-- Azioni -->
+      <div style="display:flex; gap:10px; margin-top:14px;">
+        <ion-button [disabled]="!tableId()" (click)="onGenerate()">
+          Genera / Rigenera
+        </ion-button>
+        <ion-button fill="outline" (click)="copyUrl()">Copia URL</ion-button>
+        <ion-button fill="clear" [disabled]="!url()" [routerLink]="url()!">Apri</ion-button>
+      </div>
+
+      <!-- Info URL + QR -->
+      <div style="margin-top:14px; font-size:13px; opacity:.8;">
+        <div>URL pubblico</div>
+        <div class="mono">{{ absoluteUrl() }}</div>
+        <div style="margin-top:8px;" *ngIf="!qrHtml()">QR non fornito dal BE (puoi generarlo lato FE se vuoi).</div>
+      </div>
+
+      <div *ngIf="qrHtml()" [innerHTML]="qrHtml()!" style="margin-top:10px;"></div>
+    </ion-card-content>
+  </ion-card>
+</ion-content>

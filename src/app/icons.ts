@@ -1,54 +1,48 @@
 // src/app/icons.ts
+// ============================================================================
+// Registro le Ionicons usate nell’app per evitare lazy-load a runtime
+// (in Angular standalone conviene). Aggiungo anche `scan-outline` per la pagina
+// NFC e correggo il mapping di `chevron-forward-outline`.
+// ============================================================================
+
 import { addIcons } from 'ionicons';
 import {
-  home, list, addCircle, removeCircle, ellipsisVertical,
-  funnelOutline, printOutline, qrCodeOutline, addOutline, calendarOutline,
-  documentTextOutline, createOutline, trashOutline, saveOutline,
-  callOutline, mailOutline, peopleOutline, timeOutline, searchOutline,
-  checkmarkOutline, closeOutline,
-  pulseOutline,
-  closeCircleOutline,
-  informationCircle,
-  informationCircleOutline,
-  gridOutline,
-  addCircleOutline,
-  logInOutline,
-  swapHorizontalOutline
+  // base
+  menu, logOutOutline, home, list, addCircle, grid,
+  timeOutline, pulseOutline, createOutline, calendarOutline,
+  // navigation
+  chevronBackOutline, chevronForwardOutline,
+  // misc usati in app
+  personOutline, searchOutline, refreshOutline,
+  // 👉 NFC / QR
+  scanOutline,
 } from 'ionicons/icons';
 
 export function registerAppIcons() {
   addIcons({
-    home, list,
+    // base
+    'menu': menu,
+    'logout': logOutOutline,
+    'home': home,
+    'list': list,
     'add-circle': addCircle,
-    'remove-circle': removeCircle,
-    'ellipsis-vertical': ellipsisVertical,
-    'funnel-outline': funnelOutline,
-    'print-outline': printOutline,
-    'qr-code-outline': qrCodeOutline,
-    'add-outline': addOutline,
-    'calendar-outline': calendarOutline,
-    'document-text-outline': documentTextOutline,
-    'create-outline': createOutline,
-    'trash-outline': trashOutline,
-    'save-outline': saveOutline,
-    'call-outline': callOutline,
-    'mail-outline': mailOutline,
-    'people-outline': peopleOutline,
+    'grid': grid,
     'time-outline': timeOutline,
-    'search-outline': searchOutline,
-    'checkmark-outline': checkmarkOutline,
-    'close-outline': closeOutline,
     'pulse-outline': pulseOutline,
-    'checkmark-circle-outline': checkmarkOutline,
-    'close-circle-outline': closeCircleOutline,
-    'information-circle-outline':informationCircleOutline,
-    'trash-bin-outline': trashOutline,
-    'grid': gridOutline,
-    'add-circle-outline':addCircleOutline,
-    'close':closeOutline,
-    'log-in-outline': logInOutline,
-    'swap-horizontal-outline': swapHorizontalOutline,
-    
+    'create-outline': createOutline,
+    'calendar-outline': calendarOutline,
 
+    // navigation
+    'chevron-back-outline': chevronBackOutline,
+    // ✅ fix: ora la forward è davvero forward
+    'chevron-forward-outline': chevronForwardOutline,
+
+    // misc
+    'person-outline': personOutline,
+    'search-outline': searchOutline,
+    'refresh-outline': refreshOutline,
+
+    // ✅ NFC
+    'scan-outline': scanOutline,
   });
 }

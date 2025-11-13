@@ -3,6 +3,11 @@
 <head>
   <meta charset="utf-8" />
   <title>Admin PWA</title>
+
+  <!-- 🔴 IMPORTANTE: base assoluta per SPA -->
+  <!-- Senza questo, se apri direttamente /orders/new i percorsi a chunk/js/css diventano relativi e l'app resta bianca -->
+  <base href="/" />
+
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
   <!-- 👇 facilita il client_id per il FE -->
@@ -10,6 +15,24 @@
 
   <!-- Google Identity Services (necessario per il popup) -->
   <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+  <!-- 🛟 DEV-ONLY “paracadute”: se un vecchio Service Worker rimane registrato su questa origin (es. da una preview prod),
+       in DEV (porta 8100 / localhost) lo sgancio per evitare schermate bianche su deep-link.
+       Non tocca la produzione e non modifica le tue logiche runtime. -->
+  <script>
+    (function () {
+      try {
+        var isDev = (location.hostname === 'localhost') || (location.port === '8100');
+        if (isDev && 'serviceWorker' in navigator && navigator.serviceWorker.getRegistrations) {
+          navigator.serviceWorker.getRegistrations().then(function (regs) {
+            regs.forEach(function (r) { r.unregister().catch(function () {}); });
+          });
+        }
+      } catch (_) {
+        /* no-op: silenzioso in dev */
+      }
+    })();
+  </script>
 </head>
 <body>
   <app-root></app-root>

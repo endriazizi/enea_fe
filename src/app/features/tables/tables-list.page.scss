@@ -56,3 +56,12 @@ ion-note { display:block; margin-top:6px; opacity:.9; }
 
 .actions { --padding-start: 8px; --inner-padding-end: 8px; }
 .loading { display:flex; align-items:center; justify-content:center; padding:24px; }
+
+/* 🆕 Sessione attiva: riga compatta e leggibile */
+.session {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+.session .started { opacity: .85; }

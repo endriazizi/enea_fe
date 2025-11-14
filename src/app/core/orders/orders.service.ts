@@ -1,9 +1,9 @@
-// src/app/core/orders/orders.service.ts
+// C:\Users\Endri Azizi\progetti-dev\my_dev\fe\src\app\core\orders\orders.service.ts
 // ============================================================================
 // ORDERS API client (Http + SSE) — stile Endri (commenti lunghi, emoji)
 // ============================================================================
 import { inject, Injectable } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpParams } from '@angular/common/http'; // ← aggiunto HttpParams
 import { API_URL } from '../../core/tokens';
 import { Observable } from 'rxjs';
 
@@ -45,6 +45,8 @@ export type OrderCreatePayload = {
   customer_name: string; phone?: string | null; email?: string | null;
   people?: number | null; scheduled_at?: string | null; note?: string | null;
   channel?: string; items: OrderCreateItem[];
+  // 🆕 session_id opzionale per linkare la sessione NFC
+  session_id?: number | null;
 };
 
 @Injectable({ providedIn: 'root' })
@@ -93,15 +95,23 @@ export class OrdersApi {
   }
 
   // === INGREDIENTI ===========================================================
-  // Tutti gli ingredienti attivi (per "Extra globali")
   getIngredients(): Observable<Ingredient[]> {
     return this.http.get<Ingredient[]>(`${this.base}/ingredients`);
   }
 
-  // Ingredienti del prodotto (BASE)
   getProductIngredients(productId: number): Observable<ProductIngredientChip[]> {
     return this.http.get<ProductIngredientChip[]>(
       `${this.base}/product-ingredients/by-product/${productId}`
     );
   }
+
+  // === INIZIO MODIFICA: Ordine attivo per sessione NFC =======================
+  getActiveBySession(sessionId: number) {
+    const params = new HttpParams().set('session_id', String(sessionId));
+    return this.http.get<{ ok: boolean; hasOrder: boolean; order: any }>(
+      `${this.base}/nfc/session/last-order`,
+      { params }
+    );
+  }
+  // === FINE MODIFICA =========================================================
 }

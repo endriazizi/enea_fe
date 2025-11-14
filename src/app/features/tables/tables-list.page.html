@@ -17,7 +17,8 @@
 
       <!-- Data (UI) -->
       <div class="date-ui">
-        <ion-chip color="primary" [outline]="true">
+        <!-- 👇 Ionic: per il chip outline si usa l’attributo "outline" (niente [outline]) -->
+        <ion-chip color="primary" outline>
           <ion-icon name="calendar-outline"></ion-icon>
           <ion-label>{{ selectedDayForPicker() | date:'EEEE dd/MM/yyyy' }}</ion-label>
         </ion-chip>
@@ -36,7 +37,8 @@
         <ion-segment
           [mode]="isIOS ? 'ios' : 'md'"
           scrollable="true"
-          [value]="filterState()"
+          [value]="filterState()
+          "
           (ionChange)="onFilterChange($event)">
           <ion-segment-button value="all">Tutti</ion-segment-button>
           <ion-segment-button value="free">Liberi</ion-segment-button>
@@ -82,9 +84,9 @@
               <ion-card-header>
                 <ion-card-title class="title">
                   <span>TAV. {{ t.number }} • {{ t.room_name }}</span>
-                  <ion-badge [color]="t.state==='busy' ? 'danger' : (t.state==='upcoming' ? 'warning' : (t.state==='free' ? 'success' : 'primary'))">
+                  <ion-chip [color]="t.state==='busy' ? 'danger' : (t.state==='upcoming' ? 'warning' : (t.state==='free' ? 'success' : 'primary'))">
                     {{ t.state | uppercase }}
-                  </ion-badge>
+                  </ion-chip>
                 </ion-card-title>
               </ion-card-header>
 
@@ -110,6 +112,17 @@
                   <div *ngIf="t.state==='cleaning'">
                     🔵 Pulizia: {{ formatMMSS(t.cleaningRemainingSec) }}
                   </div>
+                </div>
+
+                <!-- 🆕 Sessione attiva (chip + orario + close) -->
+                <div class="session" *ngIf="hasActive(t.id)">
+                  <!-- 👇 anche qui: attributo "outline" senza binding -->
+                  <ion-chip color="success" outline>Sessione attiva</ion-chip>
+                  <small class="started">da {{ activeFor(t.id)?.started_at | date:'shortTime' }}</small>
+                  <!-- stopPropagation: non aprire preview cliccando -->
+                  <ion-button size="small" fill="clear" (click)="closeSession(t); $event.stopPropagation()">
+                    Chiudi sessione
+                  </ion-button>
                 </div>
 
                 <!-- Bottoni (stopPropagation per non aprire preview se clicco) -->

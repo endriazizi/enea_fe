@@ -1,4 +1,4 @@
-<!-- src/app/features/orders/order-builder.page.html -->
+<!-- C:\Users\Endri Azizi\progetti-dev\my_dev\fe\src\app\features\orders\order-builder.page.html -->
 <ion-header>
   <ion-toolbar>
     <!-- 🆕 Badge tavolo in header -->
@@ -16,10 +16,53 @@
 </ion-header>
 
 <ion-content>
+
+  <!-- === INIZIO MODIFICA: Banner “Ordine attivo” =========================== -->
+  <ion-card *ngIf="activeOrder(); else noActiveOrder" class="ion-margin">
+    <ion-card-header>
+      <ion-card-title>Ordine attivo #{{ activeOrder().id }}</ion-card-title>
+      <ion-note>Status: {{ activeOrder().status }} — Totale: {{ activeOrder().total | number:'1.2-2' }} €</ion-note>
+    </ion-card-header>
+    <ion-card-content>
+      <ion-list inset *ngIf="activeOrder()?.items?.length">
+        <ion-item *ngFor="let it of activeOrder().items">
+          <ion-label>
+            <div style="font-weight:600;">{{ it.name }}</div>
+            <div style="opacity:.8; font-size:.9em;" *ngIf="it.notes">{{ it.notes }}</div>
+          </ion-label>
+          <ion-note slot="end">{{ it.qty }} × {{ it.price | number:'1.2-2' }} €</ion-note>
+        </ion-item>
+      </ion-list>
+
+      <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:10px;">
+        <ion-button size="small" color="dark" (click)="printActiveOrderBill()">
+          Stampa Conto
+        </ion-button>
+        <ion-button size="small" color="primary" (click)="printActiveOrderComanda('pizzeria')">
+          Comanda PIZZERIA
+        </ion-button>
+        <ion-button size="small" color="tertiary" (click)="printActiveOrderComanda('cucina')">
+          Comanda CUCINA
+        </ion-button>
+      </div>
+    </ion-card-content>
+  </ion-card>
+
+  <ng-template #noActiveOrder>
+    <ion-item lines="none" class="ion-margin-start ion-margin-end" *ngIf="activeOrderLoading()">
+      <ion-label>Controllo eventuale ordine attivo…</ion-label>
+      <ion-spinner name="dots" slot="end"></ion-spinner>
+    </ion-item>
+  </ng-template>
+  <!-- === FINE MODIFICA ===================================================== -->
+
   <!-- Selettori prenotazione/cliente/telefono/note/coperti... (come prima) -->
   <ion-item>
     <ion-label position="stacked">Prenotazione (oggi)</ion-label>
-    <ion-select placeholder="Seleziona (opzionale)" [value]="selectedReservation()" (ionChange)="onPickReservation($any($event.detail).value)">
+    <ion-select
+      placeholder="Seleziona (opzionale)"
+      [value]="selectedReservation()"
+      (ionChange)="onPickReservation($any($event.detail).value)">
       <ion-select-option *ngFor="let r of pickList()" [value]="r">
         {{ r.start_at | date:'HH:mm' }} — {{ r.display_name || (r.customer_first + ' ' + (r.customer_last || '')) || 'Cliente' }}
         ({{ r.party_size || '?' }} coperti)
@@ -88,7 +131,8 @@
   <div class="filters">
     <div class="category-filter">
       <ion-segment
-        [value]="selectedCategory()"
+        [value]="selectedCategory()
+        "
         (ionChange)="selectedCategory.set($any($event.detail).value)"
         mode="md">
         <ion-segment-button value="TUTTI">TUTTI</ion-segment-button>

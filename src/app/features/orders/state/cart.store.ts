@@ -3,6 +3,7 @@
 // CartStore — stato locale del carrello con signals
 // - add/remove/setQty
 // - total calcolato in centesimi (da price in €)
+// - 🆕 sessione tavolo: memorizza session_id e resetta il carrello se cambia
 // ============================================================================
 
 import { Injectable, signal, computed } from '@angular/core';
@@ -16,7 +17,30 @@ export interface CartRow {
 
 @Injectable({ providedIn: 'root' })
 export class CartStore {
+  private readonly LS_SESSION = 'order.session_id';
+
+  // 🆕 sessione corrente (id restituito dal BE quando entri da /t/:token)
+  sessionId = signal<string | number | null>(null);
+
   rows = signal<CartRow[]>([]);
+
+  constructor() {
+    // Ripristino session id salvato (non ripristino il carrello di proposito)
+    const saved = localStorage.getItem(this.LS_SESSION);
+    if (saved !== null) this.sessionId.set(saved);
+  }
+
+  // Se entra una sessione diversa → AZZERO carrello e salvo sessione
+  ensureSession(next: string | number | null | undefined) {
+    const cur = this.sessionId();
+    const val = (typeof next === 'number' || typeof next === 'string') ? String(next) : null;
+    if (val && String(cur ?? '') !== val) {
+      console.log('🧹 [Cart] nuova sessione → reset carrello', { from: cur, to: val });
+      this.rows.set([]);
+      this.sessionId.set(val);
+      try { localStorage.setItem(this.LS_SESSION, val); } catch {}
+    }
+  }
 
   // Converte price (in €) → centesimi, arrotondando correttamente
   totalCents = computed(() =>

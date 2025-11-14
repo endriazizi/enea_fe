@@ -1,4 +1,4 @@
-// src/app/features/orders/order-builder.page.ts
+// C:\Users\Endri Azizi\progetti-dev\my_dev\fe\src\app\features\orders\order-builder.page.ts
 // ============================================================================
 // OrderBuilderPage — riepilogo carrello SEMPRE visibile + Personalizza
 // - Base (SENZA) su chip rossi
@@ -10,15 +10,19 @@
 // - 🆕 Se toggle ON: creo prenotazione al volo, check-in immediato, lego l’ordine
 // - 🆕 FIX: invio customer_first / customer_last / email (+ room_id se noto)
 // - 🆕 Scelta post-conferma: STAMPA CONTO oppure invia COMANDA (centro PIZZERIA/CUCINA)
+// - 🆕 Sessione tavolo: leggo ?session_id e se cambia → azzero carrello (reset sicuro)
+// - 🆕 Persistenza DB per sessione: debounce 400ms + optimistic locking (409)
+// - 🆕 Live update via Socket.IO (stanza session:<SID>) + UI merge su conflitto
 // ============================================================================
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+
+import { Component, OnInit, OnDestroy, computed, inject, signal } from '@angular/core';
 import { NgIf, NgFor, DecimalPipe, DatePipe, SlicePipe } from '@angular/common';
 import {
   IonHeader, IonToolbar, IonTitle, IonButtons, IonButton,
   IonContent, IonItem, IonLabel, IonInput, IonTextarea, IonList,
   IonBadge, IonNote, IonSegment, IonSegmentButton,
   IonGrid, IonRow, IonCol, IonCard, IonCardHeader, IonCardTitle, IonCardContent,
-  IonFooter, IonModal, IonSelect, IonSelectOption, IonIcon, IonChip, IonToggle
+  IonFooter, IonModal, IonSelect, IonSelectOption, IonIcon, IonChip, IonToggle, IonSpinner 
 } from '@ionic/angular/standalone';
 import { Router, ActivatedRoute } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
@@ -27,6 +31,10 @@ import { OrdersApi, ProductIngredientChip, Ingredient } from '../../core/orders/
 import { ReservationsApi, Reservation } from '../../core/reservations/reservations.service';
 import { WhatsAppService } from '../../core/notifications/whatsapp.service';
 import { AuthService } from '../../core/auth/auth.service';
+import { NfcApi } from '../nfc/nfc.api'; // 🆕 persistenza cart lato DB
+
+// 🆕 live Socket.IO client (assicurati di aver eseguito: npm i socket.io-client)
+import { io, Socket } from 'socket.io-client';
 
 interface CatalogItem { id?: number | null; name: string; price: number; category?: string | null; }
 interface CartItem { name: string; price: number; qty: number; product_id?: number | null; notes?: string | null; extra_total?: number; }
@@ -56,27 +64,76 @@ const RES_DEFAULT_DURATION_MIN = 90; // 🕒 durata stimata per prenotazione cre
     IonFooter, IonModal, IonSelect, IonSelectOption, IonIcon, IonChip, IonToggle
   ]
 })
-export class OrderBuilderPage implements OnInit {
+export class OrderBuilderPage implements OnInit, OnDestroy {
   private api = inject(OrdersApi);
   private res = inject(ReservationsApi);
   private wa  = inject(WhatsAppService);
   private auth = inject(AuthService);
   private router = inject(Router);
   private route  = inject(ActivatedRoute);
+  private nfc    = inject(NfcApi); // 🆕 DB snapshot
+
+  // 🆕 Socket live update
+  private _sock: Socket | null = null;
+  private _joinedSid: number | null = null;
 
   readonly COVER_PRICE = COVER_PRICE_EUR;
 
+  // 🆕 Sessione tavolo — DB sync
+  private readonly LS_SESSION='order.session_id';
+  private readonly LS_PRESETS='order.presets';
+  sessionId   = signal<number | null>(null);
+  cartVersion = signal<number>(0);
+
+  // === INIZIO MODIFICA: stato & azioni “Ordine attivo” =======================
+  activeOrder = signal<any | null>(null);
+  activeOrderLoading = signal<boolean>(false);
+
+  private async _loadActiveOrderForSession(sid: number | null) {
+    if (!sid) { this.activeOrder.set(null); return; }
+    try {
+      this.activeOrderLoading.set(true);
+      const res = await firstValueFrom(this.api.getActiveBySession(sid));
+      this.activeOrder.set(res?.hasOrder ? (res.order || null) : null);
+      console.log('📦 [Builder] ordine attivo per sessione:', sid, '→', this.activeOrder()?.id || '(nessuno)');
+    } catch (e) {
+      console.warn('⚠️ [Builder] getActiveBySession KO', e);
+      this.activeOrder.set(null);
+    } finally {
+      this.activeOrderLoading.set(false);
+    }
+  }
+
+  async printActiveOrderBill() {
+    const ord = this.activeOrder(); if (!ord?.id) return;
+    try { await firstValueFrom(this.api.print(ord.id)); console.log('🖨️ [Builder] CONTO OK', ord.id); }
+    catch (e) { console.warn('🖨️ [Builder] CONTO KO', e); }
+  }
+  async printActiveOrderComanda(center: 'pizzeria'|'cucina' = 'pizzeria') {
+    const ord = this.activeOrder(); if (!ord?.id) return;
+    try { await firstValueFrom(this.api.printComanda(ord.id, center, 1)); console.log('🧾 [Builder] COMANDA OK', ord.id, center); }
+    catch (e) { console.warn('🧾 [Builder] COMANDA KO', e); }
+  }
+  // === FINE MODIFICA =========================================================
+
+  // 🆕 Merge dialog state (UI non mostrata in questo HTML, ma pronta)
+  mergeOpen = signal<boolean>(false);
+  private _conflictServer:any = null;
+  private _conflictServerVersion:number = 0;
+  private _conflictLocal:any = null;
+  private _conflictLocalVersion:number = 0;
+
   // form
-  customerName = signal('');  onInputName (ev:any){ this.customerName.set((ev?.detail?.value ?? ev?.target?.value ?? '').toString()); }
-  customerPhone= signal('');  onInputPhone(ev:any){ this.customerPhone.set((ev?.detail?.value ?? ev?.target?.value ?? '').toString()); }
-  customerEmail= signal('');  onInputEmail(ev:any){ this.customerEmail.set((ev?.detail?.value ?? ev?.target?.value ?? '').toString()); } // 🆕 email
-  note         = signal('');  onInputNote (ev:any){ this.note.set((ev?.detail?.value ?? ev?.target?.value ?? '').toString()); }
+  customerName = signal('');  onInputName (ev:any){ this.customerName.set((ev?.detail?.value ?? ev?.target?.value ?? '').toString()); this._debouncedSaveCart(); }
+  customerPhone= signal('');  onInputPhone(ev:any){ this.customerPhone.set((ev?.detail?.value ?? ev?.target?.value ?? '').toString()); this._debouncedSaveCart(); }
+  customerEmail= signal('');  onInputEmail(ev:any){ this.customerEmail.set((ev?.detail?.value ?? ev?.target?.value ?? '').toString()); this._debouncedSaveCart(); }
+  note         = signal('');  onInputNote (ev:any){ this.note.set((ev?.detail?.value ?? ev?.target?.value ?? '').toString()); this._debouncedSaveCart(); }
 
   // coperti
   private readonly LS_COVERS='order.covers';
   covers=signal<number>(0);
-  incCovers(){ const n=(this.covers()||0)+1; this.covers.set(n); localStorage.setItem(this.LS_COVERS,String(n)); }
-  decCovers(){ const n=Math.max(0,(this.covers()||0)-1); this.covers.set(n); localStorage.setItem(this.LS_COVERS,String(n)); }
+  incCovers(){ const n=(this.covers()||0)+1; this.covers.set(n); localStorage.setItem(this.LS_COVERS,String(n)); this._debouncedSaveCart(); }
+  decCovers(){ const n=Math.max(0,(this.covers()||0)-1); this.covers.set(n); localStorage.setItem(this.LS_COVERS,String(n)); this._debouncedSaveCart(); }
 
   // catalogo
   private menuSig = signal<CatalogItem[]>([]);
@@ -106,12 +163,12 @@ export class OrderBuilderPage implements OnInit {
   selectedReservation=signal<Reservation|null>(null);
   reservationMeta = signal<{ id: number; table_id?: number|null; room_id?: number|null; start_at?: string|null } | null>(null);
 
-  // 🆕 contesto tavolo + toggle prenotazione
+  // contesto tavolo
   tableId = signal<number|null>(null);
-  roomId  = signal<number|null>(null); // 🆕 prendo room_id dai query params se disponibile
+  roomId  = signal<number|null>(null);
   createReservationOnConfirm = signal<boolean>(false);
 
-  // 🆕 scelta post-conferma: 'conto' | 'comanda'
+  // stampa
   printMode = signal<'conto' | 'comanda'>('conto');
   comandaCenter = signal<'pizzeria' | 'cucina'>('pizzeria');
 
@@ -122,65 +179,81 @@ export class OrderBuilderPage implements OnInit {
   modalNote=signal('');
 
   // ingredienti
-  ing = signal<ProductIngredientChip[]>([]); // base
+  ing = signal<ProductIngredientChip[]>([]);
   baseList = computed(()=> {
     const rows = this.ing() || [];
     const withFlag = rows.filter((r:any) => Number((r as any).is_default ?? (r as any).is_base ?? 1) === 1);
     return withFlag.length ? withFlag : rows;
   });
 
-  allIngredients = signal<Ingredient[]>([]); // globali
-  extras = signal<Ingredient[]>([]);         // extra = globali - base
+  allIngredients = signal<Ingredient[]>([]);
+  extras = signal<Ingredient[]>([]);
   baseRemoved=signal<Record<number,true>>({});
   extraQty=signal<Record<number,number>>({});
 
   hasExtras = computed(()=> this.extras().length > 0);
   getExtraQty(id:number){ return this.extraQty()[id] || 0; }
-  incExtra(id:number){ const next={...this.extraQty()}; next[id]=(next[id]||0)+1; this.extraQty.set(next); }
-  decExtra(id:number){ const next={...this.extraQty()}; next[id]=Math.max(0,(next[id]||0)-1); if(next[id]===0) delete next[id]; this.extraQty.set(next); }
+  incExtra(id:number){ const next={...this.extraQty()}; next[id]=(next[id]||0)+1; this.extraQty.set(next); this._debouncedSaveCart(); }
+  decExtra(id:number){ const next={...this.extraQty()}; next[id]=Math.max(0,(next[id]||0)-1); if(next[id]===0) delete next[id]; this.extraQty.set(next); this._debouncedSaveCart(); }
 
-  // preview costo extra (computed)
-  private _computeExtraTotalPerUnit(): number {
-    let sum=0;
-    for(const [idStr,q] of Object.entries(this.extraQty())){
-      const row=this.extras().find(e=>e.id===+idStr);
-      const px=Number(row?.price_extra ?? 0);
-      if((q||0)>0 && px>0) sum += (q as number)*px;
-    }
-    return sum;
-  }
-  extraCostPreview = computed(()=> this._computeExtraTotalPerUnit());
+  // 🆕 piccolo tick per forzare il refresh dei preset in template
+  private presetsTick = signal(0);
+  private _bumpPresetTick(){ this.presetsTick.set(this.presetsTick()+1); }
+
+  private _saveTimer:any;
 
   async ngOnInit(){
     console.log('🧱 [OrderBuilder] init');
+
+    // 1) session_id dai query params → reset carrello se cambia (soft) + 🆕 join socket
+    this.route.queryParams.subscribe(async (qp) => {
+      const sid = Number(qp?.session_id || 0) || null;
+      this._ensureSession(sid); // soft-reset LS
+      this.sessionId.set(sid);
+
+      // 🆕 live: (ri)collego socket e faccio join stanza
+      this._ensureSocketConnected();
+      this._joinSocketSession(sid);
+
+      // 1b) se ho SID → ripristino snapshot dal DB
+      if (sid) {
+        try{
+          const got = await this.nfc.getSessionCart(sid);
+          this.cartVersion.set(Number(got?.version || 0));
+          if (got?.cart) {
+            this._restoreCartFromSnapshot(got.cart);
+            console.log('🧭 [Builder] session_id=', sid, '→ cart ripristinato (v=', this.cartVersion(), ')');
+          } else {
+            console.log('🧭 [Builder] session_id=', sid, '→ nessun cart (v=', this.cartVersion(), ')');
+          }
+        }catch(e){ console.warn('⚠️ [Builder] getSessionCart KO', e); }
+      }
+
+      // === INIZIO MODIFICA: fetch ordine attivo su cambio SID =================
+      await this._loadActiveOrderForSession(sid);
+      // === FINE MODIFICA =====================================================
+    });
+
     this.covers.set(Number(localStorage.getItem(this.LS_COVERS) || '0') || 0);
 
-    // carico tutto e poi gestisco prefill da query
     await this._loadAllIngredients();
     await this._loadMenu();
     await this._loadReservationsToday();
 
-    // 🆕 Prefill da query params (?table_id, ?reservation_id, ?room_id)
+    // prefill classico table_id/room_id/reservation_id
     this.route.queryParams.subscribe(async (qp) => {
       try{
         const tId = Number(qp?.table_id || 0) || null;
-        const rId = Number(qp?.room_id  || 0) || null; // 🆕
+        const rId = Number(qp?.room_id  || 0) || null;
         const resId = Number(qp?.reservation_id || qp?.res_id || 0) || null;
 
         this.tableId.set(tId);
         this.roomId.set(rId);
 
-        if (tId && !resId) {
-          // se arrivo da tavolo senza prenotazione → toggle ON di default
-          this.createReservationOnConfirm.set(true);
-        }
+        if (tId && !resId) this.createReservationOnConfirm.set(true);
 
         if (resId) {
-          // 1) tenta da pickList già in memoria (solo oggi)
-          let found: Reservation | null =
-            (this.pickList() || []).find(r => Number(r.id) === resId) || null;
-
-          // 2) niente getById nell'API → se non è tra le prenotazioni odierne, parto ex-novo
+          let found: Reservation | null = (this.pickList() || []).find(r => Number(r.id) === resId) || null;
           if (found) {
             console.log('✅ [OrderBuilder] prefill from reservation', { resId, tId });
             this.onPickReservation(found);
@@ -194,23 +267,40 @@ export class OrderBuilderPage implements OnInit {
     });
   }
 
+  ngOnDestroy(): void {
+    try {
+      if (this._sock) {
+        if (this._joinedSid) this._sock.emit('leave_session', { session_id: this._joinedSid });
+        this._sock.removeAllListeners();
+        this._sock.disconnect();
+        this._sock = null;
+        this._joinedSid = null;
+      }
+    } catch {}
+  }
+
   onLogout(){ this.auth.logout(); this.router.navigate(['/login'], { queryParams: { redirect: '/orders/new' } }); }
 
-  // helper — coerciamo varie forme di risposta API in un array
+  // 🆕 helper sessione — reset carrello se cambia session_id tra URL e LS
+  private _ensureSession(next:any){
+    const cur = localStorage.getItem(this.LS_SESSION);
+    const val = (next === null || typeof next === 'undefined' || next === '') ? null : String(next);
+    if (val && String(cur ?? '') !== val) {
+      console.log('🧹 [Builder] nuova sessione → reset carrello', { from: cur, to: val });
+      this.cart.set([]);
+      try { localStorage.setItem(this.LS_SESSION, val); } catch {}
+    }
+  }
+
+  // helper — coerci array vari
   private _coerceArray<T>(input:any): T[] {
     if (Array.isArray(input)) return input as T[];
     if (!input || typeof input !== 'object') return [];
     const candidates = ['data','items','rows','result','results','list'];
-    for (const k of candidates){
-      const v = (input as any)[k];
-      if (Array.isArray(v)) return v as T[];
-    }
-    for (const v of Object.values(input)){
-      if (Array.isArray(v)) return v as T[];
-    }
+    for (const k of candidates){ const v = (input as any)[k]; if (Array.isArray(v)) return v as T[]; }
+    for (const v of Object.values(input)){ if (Array.isArray(v)) return v as T[]; }
     return [];
   }
-
   private _todayISO():string{
     const d=new Date(); const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,'0'); const day=String(d.getDate()).padStart(2,'0');
     return `${y}-${m}-${day}`;
@@ -219,13 +309,12 @@ export class OrderBuilderPage implements OnInit {
     const pad=(n:number)=>String(n).padStart(2,'0');
     return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
-  private _splitName(full:string){ // 🧠 split "Nome Cognome" → {first,last}
+  private _splitName(full:string){
     const s=(full||'').trim().replace(/\s+/g,' ');
     if(!s) return { first:'', last:'' };
     const bits=s.split(' ');
     if(bits.length===1) return { first:bits[0], last:'' };
-    const first=bits.shift() as string;
-    const last=bits.join(' ');
+    const first=bits.shift() as string; const last=bits.join(' ');
     return { first, last };
   }
 
@@ -269,13 +358,13 @@ export class OrderBuilderPage implements OnInit {
 
   onPickReservation(r:Reservation|null){
     this.selectedReservation.set(r);
-    if(!r){ this.reservationMeta.set(null); return; }
+    if(!r){ this.reservationMeta.set(null); this._debouncedSaveCart(); return; }
     this.reservationMeta.set({ id:r.id, table_id:r.table_id ?? null, room_id:r.room_id ?? null, start_at:r.start_at ?? null });
 
     const name = r.display_name || `${r.customer_first || ''} ${r.customer_last || ''}`.trim();
     this.customerName.set(name || '');
     this.customerPhone.set((r.phone || '').toString());
-    this.customerEmail.set((r.email || '').toString()); // 🆕 carico email se c'è
+    this.customerEmail.set((r.email || '').toString());
     const ppl = Number(r.party_size || 0) || 0;
     this.covers.set(ppl); localStorage.setItem(this.LS_COVERS, String(ppl));
 
@@ -285,8 +374,10 @@ export class OrderBuilderPage implements OnInit {
       this.note.set(`Rif. pren. #${r.id}${tav}${hhmm ? ' ('+hhmm+')' : ''}`);
     }
     console.log('🔗 [OrderBuilder] prenotazione selezionata', { id:r.id, ppl });
+    this._debouncedSaveCart();
   }
 
+  // ====== Carrello base ======
   trackByMenuId= (_:number, m:CatalogItem)=> m.id ?? m.name;
   qtyInCart(baseName:string){ return this.cart().filter(r=>r.name===baseName && !r.notes).reduce((s,r)=>s+r.qty,0); }
   hasCustomFor(baseName:string){ return this.cart().some(r=>r.name===baseName && !!(r.notes||'').trim()); }
@@ -295,29 +386,30 @@ export class OrderBuilderPage implements OnInit {
     const next=[...this.cart()]; const idx=next.findIndex(r=>r.name===baseName && !r.notes);
     if(idx>=0) next[idx]={...next[idx], qty:next[idx].qty+1};
     else next.push({ name:baseName, price, qty:1, product_id:(m as any)?.id ?? null, notes:null, extra_total:0 });
-    this.cart.set(next);
+    this.cart.set(next); this._debouncedSaveCart();
   }
   decCartByBaseName(baseName:string){
     const next=[...this.cart()]; const idx=next.findIndex(r=>r.name===baseName && !r.notes);
-    if(idx>=0){ const cur={...next[idx]}; cur.qty=Math.max(0,cur.qty-1); if(cur.qty===0) next.splice(idx,1); else next[idx]=cur; this.cart.set(next); }
+    if(idx>=0){ const cur={...next[idx]}; cur.qty=Math.max(0,cur.qty-1); if(cur.qty===0) next.splice(idx,1); else next[idx]=cur; this.cart.set(next); this._debouncedSaveCart(); }
   }
-  incLine(line:CartItem){ this.cart.set(this.cart().map(r=> r===line ? {...r, qty:r.qty+1} : r)); }
+  incLine(line:CartItem){ this.cart.set(this.cart().map(r=> r===line ? {...r, qty:r.qty+1} : r)); this._debouncedSaveCart(); }
   decLine(line:CartItem){
     const next=[...this.cart()]; const idx=next.indexOf(line);
     if(idx>=0){
-      // ❗ FIX TS1312: usare ":" e NON "=" nell’object literal
       const cur={ ...next[idx], qty: Math.max(0, next[idx].qty - 1) };
       if(cur.qty===0) next.splice(idx,1); else next[idx]=cur;
-      this.cart.set(next);
+      this.cart.set(next); this._debouncedSaveCart();
     }
   }
   removeCartLine(line:CartItem){
     this.cart.set(this.cart().filter(r =>
       !(r.name===line.name && r.price===line.price && (r.product_id??null)===(line.product_id??null) && (r.notes??null)===(line.notes??null) && (r.extra_total??0)===(line.extra_total??0))
     ));
+    this._debouncedSaveCart();
   }
-  clearCart(){ this.cart.set([]); }
+  clearCart(){ this.cart.set([]); this._debouncedSaveCart(); }
 
+  // ====== Personalizzazione ======
   canCustomize(_m:CatalogItem){ return true; }
   async openCustomize(m:CatalogItem){
     this._targetItem=m;
@@ -347,7 +439,7 @@ export class OrderBuilderPage implements OnInit {
   }
 
   isBaseRemoved(id:number){ return !!this.baseRemoved()[id]; }
-  toggleBase(id:number){ const next={...this.baseRemoved()}; if(next[id]) delete next[id]; else next[id]=true; this.baseRemoved.set(next); }
+  toggleBase(id:number){ const next={...this.baseRemoved()}; if(next[id]) delete next[id]; else next[id]=true; this.baseRemoved.set(next); this._debouncedSaveCart(); }
 
   private _buildNotesFromSelections():string{
     const removed = this.baseList().filter(x=> this.isBaseRemoved(x.ingredient_id)).map(x=>x.name);
@@ -363,6 +455,73 @@ export class OrderBuilderPage implements OnInit {
     return parts.join(' — ');
   }
 
+  // 🆕 costo extra selezionati (per la singola riga custom)
+  extraCostPreview(): number {
+    const qtyMap = this.extraQty();
+    const extras = this.extras();
+    let tot = 0;
+    for (const [idStr, q] of Object.entries(qtyMap)) {
+      const id = Number(idStr);
+      const row = extras.find(x => x.id === id);
+      const px = Number((row as any)?.price_extra ?? 0) || 0;
+      tot += (px * (Number(q) || 0));
+    }
+    return tot;
+  }
+
+  // ====== Preset (LocalStorage) ======
+  private _loadAllPresets(): Preset[] {
+    try { return JSON.parse(localStorage.getItem(this.LS_PRESETS) || '[]') as Preset[]; } catch { return []; }
+  }
+  private _saveAllPresets(rows: Preset[]): void {
+    try { localStorage.setItem(this.LS_PRESETS, JSON.stringify(rows)); } catch {}
+  }
+  presetsForTarget(): Preset[] {
+    // piccolo tick per reattività
+    const _ = this.presetsTick();
+    const base = this._targetItem?.name || '';
+    if (!base) return [];
+    return this._loadAllPresets().filter(p => p.baseName === base).sort((a,b)=> b.created_at - a.created_at);
+  }
+  savePresetFromModal(): void {
+    const t = this._targetItem; if (!t) return;
+    const removedIds = Object.keys(this.baseRemoved()).map(Number).filter(Boolean);
+    const extraQty = { ...this.extraQty() };
+    const notes = (this._buildNotesFromSelections() || this.modalNote() || 'Preset').trim();
+    const row: Preset = {
+      id: 'P_' + Math.random().toString(36).slice(2,10),
+      baseName: t.name,
+      notes,
+      created_at: Date.now(),
+      removedBaseIds: removedIds.length ? removedIds : undefined,
+      extraQty: Object.keys(extraQty).length ? extraQty : undefined,
+      includeExtrasInTotal: !!this.includeExtrasInTotal(),
+    };
+    const all = this._loadAllPresets(); all.push(row); this._saveAllPresets(all);
+    console.log('💾 [Preset] salvato', row);
+    this._bumpPresetTick();
+  }
+  applyPresetConfig(p: Preset): void {
+    // applichiamo SOLO la configurazione (non aggiunge al carrello)
+    const rem: Record<number,true> = {};
+    for (const id of (p.removedBaseIds || [])) rem[id] = true;
+    this.baseRemoved.set(rem);
+    this.extraQty.set({ ...(p.extraQty || {}) });
+    if (typeof p.includeExtrasInTotal === 'boolean') this.includeExtrasInTotal.set(!!p.includeExtrasInTotal);
+    this.modalNote.set(p.notes || '');
+    console.log('⚙️ [Preset] applicata configurazione', p.id);
+  }
+  applyPresetAdd(p: Preset): void {
+    this.applyPresetConfig(p);
+    this.addCustomToCartFromModal();
+  }
+  deletePreset(p: Preset): void {
+    const all = this._loadAllPresets().filter(x => x.id !== p.id);
+    this._saveAllPresets(all);
+    console.log('🗑️ [Preset] eliminato', p.id);
+    this._bumpPresetTick();
+  }
+
   addCustomToCartFromModal(){
     const t=this._targetItem; if(!t) return;
     const line:CartItem={
@@ -372,66 +531,86 @@ export class OrderBuilderPage implements OnInit {
     };
     this.cart.set([...this.cart(), line]);
     console.log('🧾➕ added custom line', line);
+    this._debouncedSaveCart();
   }
 
-  // preset
-  private readonly LS_PRESETS='order.presets.v2';
-  presets=signal<Preset[]>(this._loadPresets());
-  presetsForTarget = computed(()=> {
-    const base=this._targetItem?.name || '';
-    return this.presets().filter(p=>p.baseName===base).sort((a,b)=>b.created_at-a.created_at);
-  });
-  private _loadPresets():Preset[]{ try{
-    const raw2=localStorage.getItem(this.LS_PRESETS); const arr2=raw2?JSON.parse(raw2):null; if(Array.isArray(arr2)) return arr2;
-    const raw1=localStorage.getItem('order.presets.v1'); const arr1=raw1?JSON.parse(raw1):null; if(Array.isArray(arr1)) return arr1;
-    return [];
-  }catch{ return []; } }
-  private _persistPresets(){ try{ localStorage.setItem(this.LS_PRESETS, JSON.stringify(this.presets())); }catch(e){ console.warn('💾❌ persistPresets', e); } }
-
-  savePresetFromModal(){
-    const t=this._targetItem; if(!t) return;
-    const notes=this._buildNotesFromSelections();
-    if(!notes && !Object.keys(this.baseRemoved()).length && !Object.keys(this.extraQty()).length){
-      console.log('💾⚠️ preset vuoto ignorato'); return;
-    }
-    const p:Preset={ id:`${Date.now()}-${Math.random().toString(36).slice(2,8)}`, baseName:t.name, notes, created_at:Date.now(),
-      removedBaseIds:Object.keys(this.baseRemoved()).map(Number),
-      extraQty:Object.keys(this.extraQty()).length ? {...this.extraQty()} : undefined,
-      includeExtrasInTotal:this.includeExtrasInTotal()
+  // ======================= Snapshot ⇄ Restore (DB) =======================
+  private _collectCartSnapshot(){
+    return {
+      customer_name: (this.customerName()||'').trim(),
+      customer_phone: (this.customerPhone()||'').trim() || null,
+      customer_email: (this.customerEmail()||'').trim() || null,
+      note: (this.note()||'').trim() || null,
+      covers: this.covers() || 0,
+      include_extras_in_total: !!this.includeExtrasInTotal(),
+      table_id: this.tableId(),
+      room_id: this.roomId(),
+      reservation_meta: this.reservationMeta(),
+      items: this.cart().map(r => ({
+        name: r.name, price: r.price, qty: r.qty, product_id: r.product_id ?? null,
+        notes: r.notes ?? null, extra_total: r.extra_total ?? 0
+      }))
     };
-    this.presets.set([p,...this.presets()]); this._persistPresets();
-    console.log('💾✅ preset salvato', p);
   }
-  applyPresetConfig(p:Preset){
-    this.baseRemoved.set({}); this.extraQty.set({});
-    if(p.removedBaseIds?.length){ const map:Record<number,true>={}; for(const id of p.removedBaseIds) map[id]=true; this.baseRemoved.set(map); }
-    if(p.extraQty && Object.keys(p.extraQty).length){ this.extraQty.set({...p.extraQty}); }
-    if(typeof p.includeExtrasInTotal==='boolean'){ this.includeExtrasInTotal.set(!!p.includeExtrasInTotal); }
-    this.modalNote.set('');
-    console.log('⚙️ preset configurato', p.id);
-  }
-  applyPresetAdd(p:Preset){
-    const t=this._targetItem; if(!t) return;
-    let extraPerUnit=0;
-    if(p.extraQty && Object.keys(p.extraQty).length){
-      for(const [idStr,q] of Object.entries(p.extraQty)){
-        const row=this.extras().find(e=>e.id===+idStr);
-        const px=Number(row?.price_extra ?? 0);
-        if((q||0)>0 && px>0) extraPerUnit += (q as number)*px;
-      }
-    }
-    const line:CartItem={ name:t.name, price:Number(t.price||0), qty:1, product_id:t.id ?? null, notes:p.notes || null, extra_total:extraPerUnit||0 };
-    this.cart.set([...this.cart(), line]);
-    console.log('⚡ preset aggiunto', p.id, line);
-  }
-  deletePreset(p:Preset){ this.presets.set(this.presets().filter(x=>x.id!==p.id)); this._persistPresets(); console.log('🗑️ preset eliminato', p.id); }
 
-  // 🆕 Creazione prenotazione on-demand (solo se toggle ON e non c'è già meta)
+  private _restoreCartFromSnapshot(s: any){
+    try{
+      if (!s || typeof s !== 'object') return;
+      this.customerName.set(String(s.customer_name || ''));
+      this.customerPhone.set(String(s.customer_phone || ''));
+      this.customerEmail.set(String(s.customer_email || ''));
+      this.note.set(String(s.note || ''));
+      this.covers.set(Number(s.covers || 0) || 0);
+      this.includeExtrasInTotal.set(!!s.include_extras_in_total);
+      this.tableId.set(s.table_id ?? this.tableId());
+      this.roomId.set(s.room_id ?? this.roomId());
+      if (s.reservation_meta && typeof s.reservation_meta === 'object') this.reservationMeta.set(s.reservation_meta);
+      const items:CartItem[] = Array.isArray(s.items) ? s.items.map((r:any) => ({
+        name: String(r.name), price: Number(r.price||0), qty: Number(r.qty||0),
+        product_id: r.product_id ?? null, notes: r.notes ?? null, extra_total: Number(r.extra_total||0)
+      })) : [];
+      this.cart.set(items);
+    }catch(e){ console.warn('⚠️ _restoreCartFromSnapshot KO', e); }
+  }
+
+  private _debouncedSaveCart(){
+    const sid = this.sessionId(); if (!sid) return; // nessuna sessione → niente sync
+    clearTimeout(this._saveTimer);
+    this._saveTimer = setTimeout(() => this._saveCartSnapshot(), 400);
+  }
+
+  private async _saveCartSnapshot(){
+    const sid = this.sessionId(); if (!sid) return;
+    const payload = this._collectCartSnapshot();
+    const ver = this.cartVersion();
+
+    try{
+      const out = await this.nfc.saveSessionCart(sid, ver, payload);
+      this.cartVersion.set(Number(out.version || 0));
+      // console.log('💾 [Builder] cart saved v', this.cartVersion());
+    }catch(e:any){
+      if (e?.status === 409 || e?.statusCode === 409) {
+        console.warn('🔁 [Builder] 409 version conflict → apertura MERGE UI');
+        try{
+          // carico stato corrente dal server
+          const cur = await this.nfc.getSessionCart(sid);
+          this._conflictServer = cur?.cart || null;
+          this._conflictServerVersion = Number(cur?.version || 0);
+          this._conflictLocal = payload;
+          this._conflictLocalVersion = ver;
+          this.mergeOpen.set(true);
+        }catch(re){ console.error('💥 [Builder] reload after 409 KO', re); }
+        return;
+      }
+      console.warn('💾❌ [Builder] saveSessionCart KO (cache locale, ritento al prossimo input)', e);
+    }
+  }
+
+  // ======================= PRENOTAZIONE & CONFERMA =======================
   private async _maybeCreateReservationOnConfirm(): Promise<void> {
     if (!this.createReservationOnConfirm()) return;
     if (this.reservationMeta()) return;
-    const tId = this.tableId();
-    if (!tId) return;
+    const tId = this.tableId(); if (!tId) return;
 
     const rawName = (this.customerName() || 'Cliente').trim();
     const { first, last } = this._splitName(rawName);
@@ -444,12 +623,9 @@ export class OrderBuilderPage implements OnInit {
     const end   = new Date(start.getTime() + RES_DEFAULT_DURATION_MIN*60*1000);
 
     const payload:any = {
-      // 👇 come da body di riferimento: nome/cognome/email separati
       customer_first: first || null,
       customer_last : last || null,
-      phone,
-      email,
-      party_size: ppl,
+      phone, email, party_size: ppl,
       start_at : this._fmtLocalYYYYMMDDTHHMM(start),
       end_at   : this._fmtLocalYYYYMMDDTHHMM(end),
       room_id  : this.roomId() ?? null,
@@ -466,32 +642,21 @@ export class OrderBuilderPage implements OnInit {
         typeof anyRes.add === 'function'    ? anyRes.add(payload) :
         anyRes.createReservation(payload)
       );
-
       const c: any = createdAny || {};
       const newId = Number(c.id || c.reservation?.id || 0) || 0;
 
       if (newId){
-        try{
-          if (typeof anyRes.checkIn === 'function') await firstValueFrom(anyRes.checkIn(newId));
-        }catch(ci){ console.warn('⚠️ check-in auto KO (non blocco)', ci); }
-        this.reservationMeta.set({
-          id:newId,
-          table_id: tId,
-          room_id : (c.room_id ?? this.roomId() ?? null) || null,
-          start_at: payload.start_at
-        });
+        try{ if (typeof anyRes.checkIn === 'function') await firstValueFrom(anyRes.checkIn(newId)); }catch(ci){ console.warn('⚠️ check-in auto KO', ci); }
+        this.reservationMeta.set({ id:newId, table_id: tId, room_id : (c.room_id ?? this.roomId() ?? null) || null, start_at: payload.start_at });
         console.log('✅ prenotazione creata + check-in', { id:newId });
       } else {
         console.warn('⚠️ create reservation: risposta inattesa', c);
       }
-    }catch(e){
-      console.error('💥 create reservation KO', e);
-    }
+    }catch(e){ console.error('💥 create reservation KO', e); }
   }
 
   async confirmOrder(){
     try{
-      // 🆕 Se richiesto, crea prenotazione prima di creare l'ordine
       await this._maybeCreateReservationOnConfirm();
 
       const includeExtras=this.includeExtrasInTotal();
@@ -512,21 +677,23 @@ export class OrderBuilderPage implements OnInit {
         payload.room_id        = meta.room_id ?? this.roomId() ?? null;
         payload.scheduled_at   = meta.start_at ?? null;
       }else if (this.tableId()){
-        // anche senza prenotazione voglio legare l'ordine al tavolo, se presente
         payload.table_id = this.tableId();
         payload.room_id  = this.roomId() ?? null;
       }
+
+      // === INIZIO MODIFICA: includo session_id nel body create ================
+      const sid = this.sessionId();
+      if (sid) (payload as any).session_id = sid;
+      // === FINE MODIFICA =====================================================
 
       console.log('📤 create order…', payload);
       const created:any = await firstValueFrom(this.api.create(payload as any));
       console.log('✅ creato', created);
 
-      // 🖨️ post-azione: CONTO oppure COMANDA
+      // Post-azione
       if (this.printMode() === 'conto') {
-        try{
-          await firstValueFrom(this.api.print(created.id));
-          console.log('🖨️ conto OK');
-        }catch(pe){ console.warn('🖨️ conto KO (non blocco)', pe); }
+        try{ await firstValueFrom(this.api.print(created.id)); console.log('🖨️ conto OK'); }
+        catch(pe){ console.warn('🖨️ conto KO (non blocco)', pe); }
       } else {
         try{
           const center = this.comandaCenter();
@@ -538,4 +705,79 @@ export class OrderBuilderPage implements OnInit {
       this.cart.set([]); this.customOpen.set(false); this.router.navigate(['/orders']);
     }catch(e){ console.error('💥 create KO', e); }
   }
+
+  // === 🆕 Socket helpers =======================================================
+  private _ensureSocketConnected(){
+    if (this._sock) return;
+    try{
+      this._sock = io(undefined, { withCredentials: true }); // usa origin corrente/proxy
+      this._sock.on('connect', () => console.log('🔌 [SOCKET] connected', this._sock?.id));
+      // ✅ FIX TS7006: tipizzo il parametro per evitare implicit any
+      this._sock.on('disconnect', (reason: any) => console.log('🔌 [SOCKET] disconnected', reason));
+
+      // Evento live: qualcuno ha aggiornato il carrello di questa sessione
+      this._sock.on('nfc:cart_updated', async (p: any) => {
+        const sid = this.sessionId();
+        if (!sid || Number(p?.session_id || 0) !== sid) return; // altra stanza
+        const incomingV = Number(p?.version || 0);
+        if (incomingV <= this.cartVersion()) {
+          // vecchio o uguale (probabilmente noi stessi) → ignoro
+          return;
+        }
+        console.log('📡 [SOCKET] nfc:cart_updated → reload cart (v', incomingV, ')');
+        try{
+          const cur = await this.nfc.getSessionCart(sid);
+          this.cartVersion.set(Number(cur?.version || incomingV));
+          if (cur?.cart) this._restoreCartFromSnapshot(cur.cart);
+          console.log('✅ [Builder] cart riallineato da live (v', this.cartVersion(), ')');
+        }catch(e){ console.warn('⚠️ [Builder] live reload KO', e); }
+
+        // === INIZIO MODIFICA: ricarico anche “ordine attivo” ==================
+        try { await this._loadActiveOrderForSession(sid); } catch {}
+        // === FINE MODIFICA ====================================================
+      });
+    }catch(e){
+      console.warn('📡 [SOCKET] init KO (continua senza live)', e);
+    }
+  }
+
+  private _joinSocketSession(sid: number | null){
+    if (!this._sock) return;
+    if (this._joinedSid && this._joinedSid !== sid) {
+      this._sock.emit('leave_session', { session_id: this._joinedSid });
+      console.log('🔌 [SOCKET] leave_session', this._joinedSid);
+      this._joinedSid = null;
+    }
+    if (sid && this._joinedSid !== sid) {
+      this._sock.emit('join_session', { session_id: sid });
+      console.log('🔌 [SOCKET] join_session', sid);
+      this._joinedSid = sid;
+    }
+  }
+
+  // === 🆕 Merge actions =======================================================
+  keepMine = async () => {
+    try{
+      const sid = this.sessionId(); if(!sid) return;
+      // forzo un PUT con la versione corrente del server, ma con il MIO payload
+      const serverV = this._conflictServerVersion || 0;
+      await this.nfc.saveSessionCart(sid, serverV, this._conflictLocal);
+      console.log('🟢 [Merge] mantieni il mio → salvato sovrascrivendo');
+      const cur = await this.nfc.getSessionCart(sid);
+      this.cartVersion.set(Number(cur?.version || serverV+1));
+      if (cur?.cart) this._restoreCartFromSnapshot(cur.cart);
+    }catch(e){ console.error('💥 [Merge] keepMine KO', e); }
+    this.mergeOpen.set(false);
+  };
+
+  takeTheirs = async () => {
+    try{
+      const sid = this.sessionId(); if(!sid) return;
+      // prendo lo snapshot del server (già in _conflictServer), lo applico
+      if (this._conflictServer) this._restoreCartFromSnapshot(this._conflictServer);
+      this.cartVersion.set(this._conflictServerVersion || 0);
+      console.log('🔵 [Merge] prendi il loro → allineato allo stato server');
+    }catch(e){ console.error('💥 [Merge] takeTheirs KO', e); }
+    this.mergeOpen.set(false);
+  };
 }

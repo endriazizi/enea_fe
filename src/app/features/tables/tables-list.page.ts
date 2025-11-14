@@ -11,6 +11,7 @@
 // - 🆕 Check-out + Pulizia 5:00 (solo FE): countdown mm:ss e "Libera ora"
 // - 🆕 Ordine dal tavolo → order-builder (prefill se c'è prenotazione)
 // - 🆕 Preview ordine (split pane desktop / modal mobile) + azioni builder/stampa/comanda
+// - 🆕 Badge “Sessione attiva da …” + bottone “Chiudi sessione” (NFC/QR live)
 // ============================================================================
 
 import {
@@ -36,6 +37,9 @@ import { MoveReservationModalComponent } from '../reservations/_components/move-
 
 // ⬇️ nostro inspector presentazionale (pane/modal) usato nel template
 import { OrderInspectorComponent } from '../orders/order-inspector/order-inspector.component';
+
+// 🆕 Badge sessione attiva / chiusura sessione (NFC API)
+import { NfcApi } from '../nfc/nfc.api';
 
 type TableState = 'free'|'upcoming'|'busy'|'cleaning';
 
@@ -90,6 +94,7 @@ export class TablesListPage implements OnInit, OnDestroy {
   private api    = inject(ReservationsApi);
   private router = inject(Router);
   private http   = inject(HttpClient);
+  private nfc    = inject(NfcApi); // 🆕 badge sessione/close
 
   private actionSheet = inject(ActionSheetController);
   private toast       = inject(ToastController);
@@ -147,6 +152,11 @@ export class TablesListPage implements OnInit, OnDestroy {
     return [...m.entries()].sort((a,b)=>a[0]-b[0]).map(([cap,count]) => `${cap}×${count}`).join(' • ');
   });
 
+  // 🆕 Sessioni attive (badge)
+  activeMap = signal<Record<number,{ session_id:number; started_at:string|null; updated_at?:string|null }>>({});
+  hasActive = (id:number) => !!this.activeMap()[id];
+  activeFor = (id:number) => this.activeMap()[id] || null;
+
   private logFiltersEffect?: EffectRef;
 
   constructor() {
@@ -195,7 +205,7 @@ export class TablesListPage implements OnInit, OnDestroy {
 
   roomOptions = computed(() => [{ id: 0, name: 'Tutte' }, ...this.roomsSig().map(r => ({ id: r.id, name: r.name }))]);
 
-  // === Costruzione card ============================================
+  // === Costruzione card =============================================
   private CLEAN_SEC = 5 * 60; // 5 minuti
 
   tablesSig = computed<TableCard[]>(() => {
@@ -284,10 +294,37 @@ export class TablesListPage implements OnInit, OnDestroy {
       const reservations = await this.api.list({ from, to }).toPromise();
       this.reservationsTodaySig.set(reservations || []);
 
+      // 🆕 Popola badge “Sessione attiva” per ogni tavolo (best-effort)
+      try {
+        const tables = this.tablesRawSig() || [];
+        const res = await Promise.all(
+          tables.map(async (t) => {
+            try {
+              const r:any = await this.nfc.getActiveSession(Number((t as any).id)).toPromise();
+              return { id: Number((t as any).id), r };
+            } catch {
+              return { id: Number((t as any).id), r: null };
+            }
+          })
+        );
+        const map: Record<number, any> = {};
+        for (const { id, r } of res) {
+          if (r?.ok && r.active) {
+            map[id] = { session_id: r.session_id, started_at: r.started_at || null, updated_at: r.updated_at || null };
+          }
+        }
+        this.activeMap.set(map);
+        console.log('🟢 [TablesList] sessioni attive:', Object.keys(map).length);
+      } catch (e) {
+        console.warn('ℹ️ [TablesList] sessioni attive non disponibili', e);
+        this.activeMap.set({});
+      }
+
       console.log('📊 [TablesList] rooms:', rooms?.length ?? 0, 'tables:', allTables?.length ?? 0, 'res:', reservations?.length ?? 0);
     } catch (e) {
       console.warn('⚠️ [TablesList] reload KO', e);
       this.roomsSig.set([]); this.tablesRawSig.set([]); this.reservationsTodaySig.set([]);
+      this.activeMap.set({});
     } finally {
       this.loading.set(false);
     }
@@ -314,7 +351,6 @@ export class TablesListPage implements OnInit, OnDestroy {
     if (ref?.id) queryParams.reservation_id = ref.id;
 
     console.log('🧾 [TablesList] startOrder ▶️', { table_id: t.id, room_id: t.room_id, reservation_id: ref?.id || null });
-    // NB: rotta del builder: usa '/orders/new' (coerente con redirect del tuo builder). Cambiala qui se diversa.
     this.router.navigate(['/orders/new'], { queryParams });
   }
 
@@ -378,6 +414,21 @@ export class TablesListPage implements OnInit, OnDestroy {
     (await this.toast.create({ message: 'Tavolo liberato ✅', duration: 900 })).present();
   }
 
+  // 🆕 Chiusura sessione NFC/QR dal tavolo
+  async closeSession(t: TableCard) {
+    try {
+      console.log('🧹 [TablesList] chiudi sessione ▶️', { table_id: t.id });
+      const out = await this.nfc.closeSession(t.id).toPromise();
+      // rimuovo subito il badge (ottimismo) e ricarico lista
+      const map = { ...this.activeMap() }; delete map[t.id]; this.activeMap.set(map);
+      (await this.toast.create({ message: 'Sessione chiusa ✅', duration: 1100 })).present();
+      await this.reload();
+    } catch (e) {
+      console.warn('⚠️ [TablesList] closeSession KO', e);
+      (await this.toast.create({ message: 'Impossibile chiudere la sessione', color: 'warning', duration: 1500 })).present();
+    }
+  }
+
   // === Sposta =======================================================
   private async moveReservation(t: TableCard) {
     try {
@@ -427,6 +478,12 @@ export class TablesListPage implements OnInit, OnDestroy {
         buttons.push({ text: 'Stampa', icon: 'print-outline', handler: () => this.printKitchen(t) });
       }
       if (isCleaning) buttons.push({ text: 'Libera ora', icon: 'checkmark-done-outline', handler: () => this.freeNow(t) });
+
+      // 🆕 Azione NFC: chiudi sessione se attiva
+      if (this.hasActive(t.id)) {
+        buttons.push({ text: 'Chiudi sessione', icon: 'lock-closed-outline', handler: () => this.closeSession(t) });
+      }
+
       if (isFree) buttons.push({ text: 'Nuova prenotazione', icon: 'add-circle-outline', handler: () => this.newReservation(t) });
       buttons.push({ text: 'Chiudi', role: 'cancel', icon: 'close' });
 

@@ -1,9 +1,14 @@
+// C:\Users\Endri Azizi\progetti-dev\my_dev\fe\src\app\features\orders
 // ============================================================================
 // NfcApi — service FE per NFC/QR
 // - GET  /api/rooms          (se 404 → derivo da /api/tables)
 // - GET  /api/tables?room_id=...
-// - POST /api/nfc/bind       (se 404 → fallback FE di test)
-// - GET  /api/nfc/resolve?token=...   ✅ endpoint corretto
+// - POST /api/nfc/bind
+// - GET  /api/nfc/resolve?token=...   → { table_id, session_id, ... }
+// - POST /api/nfc/session/close       → chiude la sessione attiva del tavolo
+// - 🆕 GET  /api/nfc/session/cart?session_id=SID
+// - 🆕 PUT  /api/nfc/session/cart { session_id, version, cart }
+// - 🆕 GET  /api/nfc/session/active?table_id=... → badge “Sessione attiva da …”
 //   (alias retro-compat: entry(token) → resolve(token))
 // ============================================================================
 
@@ -15,13 +20,28 @@ export interface NfcRoom { id: number; name?: string; }
 export interface NfcTable { id: number; room_id: number; table_number: number; label?: string; capacity?: number; }
 export interface NfcBindPayload { table_id: number; note?: string; }
 export interface NfcBindResult { token: string; url: string; qr_svg?: string | null; }
-export interface NfcResolveResult { table_id: number; redirect_url?: string; }
+export interface NfcResolveResult {
+  table_id: number;
+  room_id?: number;
+  table_number?: number;
+  reservation_id?: number | null;
+  session_id?: number | null;   // 👈 NEW
+  redirect_url?: string;
+}
+
+export interface NfcSessionCartGet {
+  ok: boolean;
+  session_id: number;
+  version: number;
+  cart: any | null;
+  updated_at?: string | null;
+}
+export interface NfcSessionCartPut { ok: boolean; session_id: number; version: number; updated_at?: string | null; }
 
 @Injectable({ providedIn: 'root' })
 export class NfcApi {
   private http = inject(HttpClient);
 
-  // ---- ROOMS -------------------------------------------------------
   listRooms() {
     return this.http.get<any[]>('/api/rooms').pipe(
       map(rows => rows?.map(r => ({
@@ -47,7 +67,6 @@ export class NfcApi {
     );
   }
 
-  // ---- TABLES ------------------------------------------------------
   listTables(roomId?: number) {
     const params = roomId ? new HttpParams().set('room_id', String(roomId)) : undefined;
     return this.http.get<NfcTable[]>('/api/tables', { params }).pipe(
@@ -58,12 +77,10 @@ export class NfcApi {
     );
   }
 
-  // ---- BIND --------------------------------------------------------
   bind(payload: NfcBindPayload) {
     return this.http.post<NfcBindResult>('/api/nfc/bind', payload).pipe(
       catchError(err => {
         if (err.status === 404) {
-          // Fallback FE per test rapido
           const tok = 'TEST_' + Math.random().toString(36).slice(2, 10).toUpperCase();
           console.warn('🧪 [NFC] /api/nfc/bind 404 → fallback FE (token finto)');
           return of({ token: tok, url: `/t/${tok}`, qr_svg: null } as NfcBindResult);
@@ -73,8 +90,6 @@ export class NfcApi {
     );
   }
 
-  // ---- RESOLVE token (endpoint corretto) ---------------------------
-  // GET /api/nfc/resolve?token=XYZ
   async resolve(token: string): Promise<NfcResolveResult> {
     const params = new HttpParams().set('token', token);
     const url = `/api/nfc/resolve`;
@@ -82,9 +97,33 @@ export class NfcApi {
     return await firstValueFrom(this.http.get<NfcResolveResult>(url, { params }));
   }
 
-  // ---- Alias RETRO-COMPAT -----------------------------------------
-  // Qualche codice vecchio potrebbe ancora chiamare entry(token).
-  // Inoltro su resolve(token) per evitare 404 su /api/nfc/entry/:token
+  closeSession(table_id: number) {
+    return this.http.post<{ ok: boolean; closed: number; session_id?: number }>(
+      '/api/nfc/session/close', { table_id, by: 'admin' }
+    );
+  }
+
+  // ===================== Session Cart =====================
+  async getSessionCart(sessionId: number): Promise<NfcSessionCartGet> {
+    const params = new HttpParams().set('session_id', String(sessionId));
+    return await firstValueFrom(this.http.get<NfcSessionCartGet>('/api/nfc/session/cart', { params }));
+  }
+
+  async saveSessionCart(sessionId: number, version: number, cart: any): Promise<NfcSessionCartPut> {
+    return await firstValueFrom(this.http.put<NfcSessionCartPut>('/api/nfc/session/cart', {
+      session_id: sessionId, version, cart
+    }));
+  }
+
+  // ===================== Session Active (badge Tavoli) =====================
+  getActiveSession(tableId: number) {
+    const params = new HttpParams().set('table_id', String(tableId));
+    return this.http.get<{ ok:boolean; active:boolean; session_id?:number; started_at?:string; updated_at?:string|null }>(
+      '/api/nfc/session/active', { params }
+    );
+  }
+
+  // Retro-compat
   async entry(token: string): Promise<NfcResolveResult> {
     console.warn('ℹ️ [NFC API] entry(token) deprecato → uso resolve(token).');
     return this.resolve(token);

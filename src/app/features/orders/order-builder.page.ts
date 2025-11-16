@@ -13,6 +13,8 @@
 // - 🆕 Sessione tavolo: leggo ?session_id e se cambia → azzero carrello (reset sicuro)
 // - 🆕 Persistenza DB per sessione: debounce 400ms + optimistic locking (409)
 // - 🆕 Live update via Socket.IO (stanza session:<SID>) + UI merge su conflitto
+// - 🆕 Ordine attivo per sessione + pulsanti stampa conto/comanda
+// - 🆕 Categorie ordinate via sort_order (BEVANDE ultima)
 // ============================================================================
 
 import { Component, OnInit, OnDestroy, computed, inject, signal } from '@angular/core';
@@ -22,7 +24,7 @@ import {
   IonContent, IonItem, IonLabel, IonInput, IonTextarea, IonList,
   IonBadge, IonNote, IonSegment, IonSegmentButton,
   IonGrid, IonRow, IonCol, IonCard, IonCardHeader, IonCardTitle, IonCardContent,
-  IonFooter, IonModal, IonSelect, IonSelectOption, IonIcon, IonChip, IonToggle, IonSpinner 
+  IonFooter, IonModal, IonSelect, IonSelectOption, IonIcon, IonChip, IonToggle, IonSpinner
 } from '@ionic/angular/standalone';
 import { Router, ActivatedRoute } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
@@ -31,12 +33,19 @@ import { OrdersApi, ProductIngredientChip, Ingredient } from '../../core/orders/
 import { ReservationsApi, Reservation } from '../../core/reservations/reservations.service';
 import { WhatsAppService } from '../../core/notifications/whatsapp.service';
 import { AuthService } from '../../core/auth/auth.service';
-import { NfcApi } from '../nfc/nfc.api'; // 🆕 persistenza cart lato DB
+import { NfcApi } from '../nfc/nfc.api';
 
 // 🆕 live Socket.IO client (assicurati di aver eseguito: npm i socket.io-client)
 import { io, Socket } from 'socket.io-client';
 
-interface CatalogItem { id?: number | null; name: string; price: number; category?: string | null; }
+// 🆕 categorySort: ci portiamo dietro il sort_order della categoria
+interface CatalogItem {
+  id?: number | null;
+  name: string;
+  price: number;
+  category?: string | null;
+  categorySort?: number | null;
+}
 interface CartItem { name: string; price: number; qty: number; product_id?: number | null; notes?: string | null; extra_total?: number; }
 interface OrderItemInput { name: string; qty: number; price: number; product_id?: number | null; notes?: string | null; }
 interface OrderInputPayload {
@@ -62,7 +71,7 @@ const RES_DEFAULT_DURATION_MIN = 90; // 🕒 durata stimata per prenotazione cre
     IonBadge, IonNote, IonSegment, IonSegmentButton,
     IonGrid, IonRow, IonCol, IonCard, IonCardHeader, IonCardTitle, IonCardContent,
     IonFooter, IonModal, IonSelect, IonSelectOption, IonIcon, IonChip, IonToggle,
-     IonSpinner           // 👈 per <ion-spinner> nel template
+    IonSpinner
   ]
 })
 export class OrderBuilderPage implements OnInit, OnDestroy {
@@ -86,12 +95,15 @@ export class OrderBuilderPage implements OnInit, OnDestroy {
   sessionId   = signal<number | null>(null);
   cartVersion = signal<number>(0);
 
-  // === INIZIO MODIFICA: stato & azioni “Ordine attivo” =======================
+  // === Stato & azioni “Ordine attivo” ========================================
   activeOrder = signal<any | null>(null);
   activeOrderLoading = signal<boolean>(false);
 
   private async _loadActiveOrderForSession(sid: number | null) {
-    if (!sid) { this.activeOrder.set(null); return; }
+    if (!sid) {
+      this.activeOrder.set(null);
+      return;
+    }
     try {
       this.activeOrderLoading.set(true);
       const res = await firstValueFrom(this.api.getActiveBySession(sid));
@@ -115,7 +127,6 @@ export class OrderBuilderPage implements OnInit, OnDestroy {
     try { await firstValueFrom(this.api.printComanda(ord.id, center, 1)); console.log('🧾 [Builder] COMANDA OK', ord.id, center); }
     catch (e) { console.warn('🧾 [Builder] COMANDA KO', e); }
   }
-  // === FINE MODIFICA =========================================================
 
   // 🆕 Merge dialog state (UI non mostrata in questo HTML, ma pronta)
   mergeOpen = signal<boolean>(false);
@@ -138,10 +149,32 @@ export class OrderBuilderPage implements OnInit, OnDestroy {
 
   // catalogo
   private menuSig = signal<CatalogItem[]>([]);
+
+  // 🆕 categorie ordinate per sort_order (fallback alfabetico)
   categories = computed(() => {
-    const s=new Set<string>(); for (const m of this.menuSig()) s.add((m.category ?? 'Altro').toString().trim() || 'Altro');
-    return Array.from(s).sort((a,b)=>a.localeCompare(b,'it'));
+    // mappa categoria → sort minimo trovato
+    const map = new Map<string, { name: string; sort: number }>();
+
+    for (const m of this.menuSig()) {
+      const name = (m.category ?? 'Altro').toString().trim() || 'Altro';
+      const sort = (typeof m.categorySort === 'number' && !Number.isNaN(m.categorySort))
+        ? m.categorySort!
+        : 9999; // fallback “in fondo”
+      const cur = map.get(name);
+      if (!cur || sort < cur.sort) {
+        map.set(name, { name, sort });
+      }
+    }
+
+    const arr = Array.from(map.values());
+    arr.sort((a, b) => {
+      if (a.sort !== b.sort) return a.sort - b.sort;
+      return a.name.localeCompare(b.name, 'it');
+    });
+
+    return arr.map(r => r.name);
   });
+
   selectedCategory=signal('TUTTI');
   filteredMenu = computed(() => {
     const cat=this.selectedCategory(); const all=this.menuSig();
@@ -172,6 +205,45 @@ export class OrderBuilderPage implements OnInit, OnDestroy {
   // stampa
   printMode = signal<'conto' | 'comanda'>('conto');
   comandaCenter = signal<'pizzeria' | 'cucina'>('pizzeria');
+
+  // 🆕 pannello collassabile per i dettagli ordine (prenotazione + cliente + coperti)
+  metaCollapsed = signal<boolean>(false);
+  metaSummary = computed(() => {
+    const name   = (this.customerName() || '').trim();
+    const covers = this.covers() || 0;
+    const res    = this.selectedReservation();
+    const parts: string[] = [];
+
+    if (name) parts.push(name);
+    if (covers > 0) parts.push(`${covers} coperti`);
+
+    if (res && res.start_at) {
+      try {
+        const d = new Date(res.start_at);
+        const hhmm = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        parts.push(`pren. ${hhmm}`);
+      } catch {
+        // formato data strano → ignoro
+      }
+    }
+
+    const mode = this.printMode();
+    if (mode === 'comanda') {
+      const center = this.comandaCenter();
+      parts.push(center === 'cucina' ? 'Comanda CUCINA' : 'Comanda PIZZERIA');
+    } else {
+      parts.push('Stampa conto');
+    }
+
+    if (!parts.length) return 'Compila i dettagli ordine';
+    return parts.join(' · ');
+  });
+
+  toggleMetaCollapsed() {
+    const next = !this.metaCollapsed();
+    this.metaCollapsed.set(next);
+    console.log('🧾 [OrderBuilder] pannello dettagli', next ? 'chiuso' : 'aperto');
+  }
 
   // personalizza
   customOpen=signal(false);
@@ -230,9 +302,8 @@ export class OrderBuilderPage implements OnInit, OnDestroy {
         }catch(e){ console.warn('⚠️ [Builder] getSessionCart KO', e); }
       }
 
-      // === INIZIO MODIFICA: fetch ordine attivo su cambio SID =================
+      // fetch ordine attivo su cambio SID
       await this._loadActiveOrderForSession(sid);
-      // === FINE MODIFICA =====================================================
     });
 
     this.covers.set(Number(localStorage.getItem(this.LS_COVERS) || '0') || 0);
@@ -340,13 +411,43 @@ export class OrderBuilderPage implements OnInit, OnDestroy {
       notes:r.notes ?? r.note ?? r.status_note ?? null, created_at:r.created_at ?? null, updated_at:r.updated_at ?? null,
       table_number:r.table_number ?? null, table_name:r.table_name ?? null };
   };
+
+  // 🆕 carico menu con categorySort (sort_order categoria)
   private async _loadMenu(){
     try{
-      const menu=await firstValueFrom(this.api.getMenu());
-      this.menuSig.set((menu||[]).map(m => ({ id:m.id ?? null, name:m.name, price:Number(m.price||0), category:(m.category ?? null) })));
+      const menu = await firstValueFrom(this.api.getMenu());
+      const rows = (menu || []) as any[];
+
+      const norm: CatalogItem[] = rows.map((m:any) => {
+        const catName = m.category ?? m.category_name ?? null;
+        // supporto più nomi possibili per il sort della categoria
+        const sortRaw =
+          m.category_sort_order ??
+          m.category_sort ??
+          m.categorySort ??
+          m.sort_order ??
+          m.category_order ??
+          null;
+
+        const sort = sortRaw != null ? Number(sortRaw) : null;
+
+        return {
+          id: m.id ?? null,
+          name: m.name,
+          price: Number(m.price || 0),
+          category: catName,
+          categorySort: (sort != null && !Number.isNaN(sort)) ? sort : null
+        };
+      });
+
+      this.menuSig.set(norm);
       console.log('📥 [OrderBuilder] menu items:', this.menuSig().length);
-    }catch(e){ console.error('💥 [OrderBuilder] getMenu KO', e); this.menuSig.set([]); }
+    }catch(e){
+      console.error('💥 [OrderBuilder] getMenu KO', e);
+      this.menuSig.set([]);
+    }
   }
+
   private async _loadAllIngredients(){
     try{
       const all=await firstValueFrom(this.api.getIngredients());
@@ -378,7 +479,7 @@ export class OrderBuilderPage implements OnInit, OnDestroy {
     this._debouncedSaveCart();
   }
 
-  // ====== Carrello base ======
+  // ====== Carrello base ======================================================
   trackByMenuId= (_:number, m:CatalogItem)=> m.id ?? m.name;
   qtyInCart(baseName:string){ return this.cart().filter(r=>r.name===baseName && !r.notes).reduce((s,r)=>s+r.qty,0); }
   hasCustomFor(baseName:string){ return this.cart().some(r=>r.name===baseName && !!(r.notes||'').trim()); }
@@ -410,7 +511,7 @@ export class OrderBuilderPage implements OnInit, OnDestroy {
   }
   clearCart(){ this.cart.set([]); this._debouncedSaveCart(); }
 
-  // ====== Personalizzazione ======
+  // ====== Personalizzazione ==================================================
   canCustomize(_m:CatalogItem){ return true; }
   async openCustomize(m:CatalogItem){
     this._targetItem=m;
@@ -470,7 +571,7 @@ export class OrderBuilderPage implements OnInit, OnDestroy {
     return tot;
   }
 
-  // ====== Preset (LocalStorage) ======
+  // ====== Preset (LocalStorage) =============================================
   private _loadAllPresets(): Preset[] {
     try { return JSON.parse(localStorage.getItem(this.LS_PRESETS) || '[]') as Preset[]; } catch { return []; }
   }
@@ -535,7 +636,7 @@ export class OrderBuilderPage implements OnInit, OnDestroy {
     this._debouncedSaveCart();
   }
 
-  // ======================= Snapshot ⇄ Restore (DB) =======================
+  // ======================= Snapshot ⇄ Restore (DB) ==========================
   private _collectCartSnapshot(){
     return {
       customer_name: (this.customerName()||'').trim(),
@@ -607,7 +708,7 @@ export class OrderBuilderPage implements OnInit, OnDestroy {
     }
   }
 
-  // ======================= PRENOTAZIONE & CONFERMA =======================
+  // ======================= PRENOTAZIONE & CONFERMA ==========================
   private async _maybeCreateReservationOnConfirm(): Promise<void> {
     if (!this.createReservationOnConfirm()) return;
     if (this.reservationMeta()) return;
@@ -682,10 +783,9 @@ export class OrderBuilderPage implements OnInit, OnDestroy {
         payload.room_id  = this.roomId() ?? null;
       }
 
-      // === INIZIO MODIFICA: includo session_id nel body create ================
+      // includo session_id nel body create
       const sid = this.sessionId();
       if (sid) (payload as any).session_id = sid;
-      // === FINE MODIFICA =====================================================
 
       console.log('📤 create order…', payload);
       const created:any = await firstValueFrom(this.api.create(payload as any));
@@ -707,13 +807,12 @@ export class OrderBuilderPage implements OnInit, OnDestroy {
     }catch(e){ console.error('💥 create KO', e); }
   }
 
-  // === 🆕 Socket helpers =======================================================
+  // === Socket helpers =======================================================
   private _ensureSocketConnected(){
     if (this._sock) return;
     try{
       this._sock = io(undefined, { withCredentials: true }); // usa origin corrente/proxy
       this._sock.on('connect', () => console.log('🔌 [SOCKET] connected', this._sock?.id));
-      // ✅ FIX TS7006: tipizzo il parametro per evitare implicit any
       this._sock.on('disconnect', (reason: any) => console.log('🔌 [SOCKET] disconnected', reason));
 
       // Evento live: qualcuno ha aggiornato il carrello di questa sessione
@@ -733,9 +832,8 @@ export class OrderBuilderPage implements OnInit, OnDestroy {
           console.log('✅ [Builder] cart riallineato da live (v', this.cartVersion(), ')');
         }catch(e){ console.warn('⚠️ [Builder] live reload KO', e); }
 
-        // === INIZIO MODIFICA: ricarico anche “ordine attivo” ==================
+        // ricarico anche “ordine attivo”
         try { await this._loadActiveOrderForSession(sid); } catch {}
-        // === FINE MODIFICA ====================================================
       });
     }catch(e){
       console.warn('📡 [SOCKET] init KO (continua senza live)', e);
@@ -756,7 +854,7 @@ export class OrderBuilderPage implements OnInit, OnDestroy {
     }
   }
 
-  // === 🆕 Merge actions =======================================================
+  // === Merge actions ========================================================
   keepMine = async () => {
     try{
       const sid = this.sessionId(); if(!sid) return;

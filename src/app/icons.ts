@@ -31,6 +31,8 @@ import {
   close,
   cartOutline,
   peopleOutline,
+  chevronDownOutline,
+  chevronUpOutline,
 } from 'ionicons/icons';
 
 export function registerAppIcons() {
@@ -73,5 +75,7 @@ export function registerAppIcons() {
 
     // ✅ NFC
     'scan-outline': scanOutline,
+    'chevron-down-outline': chevronDownOutline,
+    'chevron-up-outline': chevronUpOutline
   });
 }

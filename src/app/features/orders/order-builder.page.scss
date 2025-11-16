@@ -31,7 +31,7 @@
 .px { margin-left: 6px; opacity: .85; }
 
 /* === Filtri/Categorie — stile Tavoli (aggiunto, nessuna logica cambiata) === */
-.filters { display: grid; gap: 8px; margin: 8px 12px 10px; }
+.filters { display: grid; gap: 8px; margin: 8px 12px 10px; } /* ancora usata altrove */
 .category-filter ion-segment { margin-top: 4px; }
 
 /* Lista inset con look coerente al resto della PWA */
@@ -50,6 +50,8 @@ ion-item { --padding-start: 12px; --inner-padding-end: 12px; }
   color: var(--ion-color-primary-contrast);
   font-weight: 600; font-size: .95em;
 }
+
+/* (pill sessione se la usi) */
 .session-pill {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 4px 8px; border-radius: 999px; margin-left: 8px;
@@ -70,7 +72,7 @@ ion-item { --padding-start: 12px; --inner-padding-end: 12px; }
   background: rgba(0,0,0,.04);
 }
 
-/* Controlli stampa/comanda (radio/segment + select centro) */
+/* Controlli stampa/comanda (alla conferma) */
 .print-controls {
   display: grid; gap: 8px; align-items: center;
   grid-template-columns: 1fr auto;
@@ -144,20 +146,17 @@ ion-chip.chip-extra {
 .nowrap { white-space: nowrap; }
 .w-100 { width: 100%; }
 
-/* Banner/striscia per conflitti merge (se la UI è presente) */
 .merge-banner {
-  display: none; /* tienilo nascosto finché non apri la UI */
+  display: none;
   padding: 10px 12px; border-radius: 12px; margin: 8px 12px;
   background: #fff7e6; border: 1px solid #ffd591; color: #ad6800;
 }
 .merge-banner.open { display: block; }
 
-/* Pulsanti piccoli coerenti */
 .btn-compact {
   height: 28px; --padding-start: 10px; --padding-end: 10px; font-weight: 700;
 }
 
-/* Allineamento select/segment nella toolbar interna */
 .toolbar-inline {
   display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
 }
@@ -172,22 +171,140 @@ ion-chip.chip-extra {
   --padding-start: 10px; --padding-end: 10px;
 }
 
-/* Piccolo separatore tra blocchi */
 .block { padding: 8px 12px; }
 .block + .block { padding-top: 0; }
 
-/* IonCard "in evidenza" per riepiloghi (se usato per prenotazione selezionata) */
 .card-soft {
   border-radius: 14px; background: rgba(0,0,0,.03);
   box-shadow: inset 0 0 0 1px rgba(0,0,0,.06);
 }
 
-/* Accessibilità: tap target su icone +/- nelle righe carrello */
 .icon-tap {
   display: inline-flex; align-items: center; justify-content: center;
   width: 34px; height: 34px; border-radius: 999px;
   background: rgba(0,0,0,.05);
 }
 
-/* Riduci micro-margini su liste con molte azioni */
 .compact-list ion-item { --min-height: 46px; }
+
+/* =================== UI “Dettagli ordine” (nuova versione) ================== */
+
+.order-meta-card {
+  margin: 8px 12px 12px;
+  border-radius: 14px;
+  background: rgba(0,0,0,.02);
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.04);
+}
+
+.order-meta-header {
+  --background: transparent;
+  --inner-padding-end: 8px;
+}
+
+.order-meta-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.order-meta-title {
+  font-weight: 600;
+}
+
+.order-meta-summary {
+  flex: 1;
+  text-align: right;
+  font-size: 0.8rem;
+  opacity: .75;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.order-meta-body {
+  padding-bottom: 4px;
+}
+
+/* Barra compatta STICKY quando il pannello è collassato */
+.order-meta-bar {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--ion-color-light, #ffffff);
+  box-shadow: 0 2px 4px rgba(0,0,0,.06);
+  border-bottom: 1px solid rgba(0,0,0,.06);
+}
+
+.order-meta-bar-left { min-width: 0; }
+
+.order-meta-bar-title {
+  font-size: .9rem;
+  font-weight: 600;
+}
+
+.order-meta-bar-summary {
+  font-size: .75rem;
+  opacity: .8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.order-meta-bar-icon {
+  flex: 0 0 auto;
+}
+
+/* =================== TOOLBAR STICKY (segment conferma + categorie) ========= */
+
+.order-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  padding: 6px 12px 8px;
+  background: var(--ion-color-light, #ffffff);
+  box-shadow: 0 1px 3px rgba(0,0,0,.04);
+  display: grid;
+  gap: 6px;
+}
+
+/* Quando il pannello è collassato, la barra Dettagli occupa ~40px:
+   sposto la toolbar appena sotto, così restano attaccate. */
+.order-toolbar--offset {
+  top: 40px;
+}
+
+/* Segment stampa stile iOS (riusato per "Alla conferma" e centro comanda) */
+.order-print-segment,
+.order-category-segment {
+  --background: rgba(0,0,0,.04);
+  border-radius: 999px;
+  padding: 2px;
+}
+
+.order-print-segment ion-segment-button,
+.order-category-segment ion-segment-button {
+  --border-radius: 999px;
+  --indicator-box-shadow: 0 2px 4px rgba(0,0,0,.08);
+  --indicator-color: #ffffff;
+  --color: rgba(0,0,0,.6);
+  --color-checked: #000000;
+  text-transform: uppercase;
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
+/* Categorie scrollabili orizzontalmente su mobile */
+.order-category-segment {
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: none;
+}
+.order-category-segment::-webkit-scrollbar {
+  display: none;
+}

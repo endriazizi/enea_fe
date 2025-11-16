@@ -1,6 +1,8 @@
 // ============================================================================
 // GoogleContactsService (SPA + GIS popup)
-// - searchContacts(): se 401 → apre consenso READ e ritenta.
+// - searchContacts(): chiama /people/search e, se c'è un errore (es. consenso
+//   mancante), rilancia l'eccezione così la pagina può mostrare il banner
+//   "Connetti Google".
 // - createContact(): se 401 → consenso READ; se 403 → consenso WRITE; poi ritenta.
 // - connectRead(): consenso per lettura
 // - ensureWriteScope(): estensione permessi per scrittura
@@ -98,18 +100,9 @@ export class GoogleContactsService {
 
       return r?.ok ? (r.items || []) : [];
     } catch (e: any) {
-      if (e?.status === 401 && e?.error?.reason === 'google_consent_required') {
-        try {
-          const ok = await this.connectRead();
-          if (ok) {
-            const rr: any = await this.http
-              .get(`${this.base}/people/search`, { params: { q: query, limit } })
-              .toPromise();
-            return rr?.ok ? (rr.items || []) : [];
-          }
-        } catch {/* utente ha chiuso il popup */}
-      }
-      return [];
+      // ❗ Non gestisco più qui il consenso; lascio la responsabilità
+      // alla pagina (NewReservationPage) che mostra il banner "Connetti Google".
+      throw e;
     } finally {
       this.searching.set(false);
     }

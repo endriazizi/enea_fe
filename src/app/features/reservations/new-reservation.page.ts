@@ -8,7 +8,8 @@ import {
   IonContent, IonHeader, IonToolbar, IonTitle,
   IonItem, IonLabel, IonInput, IonButton, IonSelect, IonSelectOption,
   IonTextarea, IonDatetime, IonNote, IonList,
-  IonIcon, IonFab, IonFabButton, IonFabList
+  IonIcon, IonFab, IonFabButton, IonFabList,
+  IonSpinner            // 👈 già pronto se vuoi usarlo in futuro nel template
 } from '@ionic/angular/standalone';
 import { ToastController } from '@ionic/angular';
 
@@ -37,6 +38,7 @@ import { WhatsAppService } from '../../core/notifications/whatsapp.service';
     IonFab, IonFabButton, IonFabList,
     DateQuickComponent,
     GContactsAutocompleteComponent,
+    IonSpinner,                         // 👈 import dichiarato (anche se non usato nel template)
   ]
 })
 export class NewReservationPage implements OnDestroy {
@@ -80,7 +82,9 @@ export class NewReservationPage implements OnDestroy {
         this.gcNeedsRead.set(false);
         (await this.toast.create({ message: 'Google collegato ✅', duration: 1300 })).present();
       }
-    } catch {/* popup chiuso */}
+    } catch {
+      // popup chiuso dall'utente, nessun alert
+    }
   }
 
   onContactSelected(pick: GContactPick | null) {
@@ -115,10 +119,12 @@ export class NewReservationPage implements OnDestroy {
     this.pickedDateISO.set(dateISO);
     if (this.pickedTime()) this.patchStartFromPick();
   }
+
   onSelectTime(t: string) {
     this.pickedTime.set(t);
     this.patchStartFromPick();
   }
+
   isSlotDisabled(dateISO: string, t: string): boolean {
     const todayISO = this.todayISO();
     if (dateISO !== todayISO) return false;
@@ -126,6 +132,7 @@ export class NewReservationPage implements OnDestroy {
     const [hh, mm] = t.split(':').map(n => +n);
     return now.getHours() > hh || (now.getHours() === hh && now.getMinutes() > mm);
   }
+
   selectedDateHuman(): string {
     const [y,m,d] = this.pickedDateISO().split('-').map(n => +n);
     return new Intl.DateTimeFormat('it-IT', { weekday:'long', day:'2-digit', month:'2-digit', year:'numeric' })
@@ -174,8 +181,15 @@ export class NewReservationPage implements OnDestroy {
     this.form.controls[ctrl].setValue(next, { emitEvent: false });
   }
 
-  incParty() { const n = (this.form.value.party_size || 1) + 1; this.form.patchValue({ party_size: n }); }
-  decParty() { const n = Math.max(1, (this.form.value.party_size || 1) - 1); this.form.patchValue({ party_size: n }); }
+  incParty() {
+    const n = (this.form.value.party_size || 1) + 1;
+    this.form.patchValue({ party_size: n });
+  }
+
+  decParty() {
+    const n = Math.max(1, (this.form.value.party_size || 1) - 1);
+    this.form.patchValue({ party_size: n });
+  }
 
   // ==== Sale/Tavoli ====
   async ngOnInit() {
@@ -195,12 +209,14 @@ export class NewReservationPage implements OnDestroy {
       this.disableTableSelect();
     }
   }
+
   ngOnDestroy() {}
 
   private disableTableSelect() {
     try { this.form.controls.table_id.disable({ emitEvent: false }); } catch {}
     this.tables.set([]);
   }
+
   private enableTableSelect() {
     try { this.form.controls.table_id.enable({ emitEvent: false }); } catch {}
   }
@@ -313,6 +329,7 @@ export class NewReservationPage implements OnDestroy {
     const v = `${this.pickedDateISO()}T${this.pickedTime()}`;
     this.form.patchValue({ start_at: v, end_at: null });
   }
+
   private todayISO(): string {
     const d = new Date();
     return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;

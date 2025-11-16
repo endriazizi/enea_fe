@@ -61,7 +61,8 @@ const RES_DEFAULT_DURATION_MIN = 90; // 🕒 durata stimata per prenotazione cre
     IonContent, IonItem, IonLabel, IonInput, IonTextarea, IonList,
     IonBadge, IonNote, IonSegment, IonSegmentButton,
     IonGrid, IonRow, IonCol, IonCard, IonCardHeader, IonCardTitle, IonCardContent,
-    IonFooter, IonModal, IonSelect, IonSelectOption, IonIcon, IonChip, IonToggle
+    IonFooter, IonModal, IonSelect, IonSelectOption, IonIcon, IonChip, IonToggle,
+     IonSpinner           // 👈 per <ion-spinner> nel template
   ]
 })
 export class OrderBuilderPage implements OnInit, OnDestroy {

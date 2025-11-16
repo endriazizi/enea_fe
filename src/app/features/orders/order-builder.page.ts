@@ -14,7 +14,8 @@
 // - 🆕 Persistenza DB per sessione: debounce 400ms + optimistic locking (409)
 // - 🆕 Live update via Socket.IO (stanza session:<SID>) + UI merge su conflitto
 // - 🆕 Ordine attivo per sessione + pulsanti stampa conto/comanda
-// - 🆕 Categorie ordinate via sort_order (BEVANDE ultima)
+// - 🆕 Categorie ordinate via sort_order (con priorità: ANTIPASTI, PIZZE ROSSE, PIZZE BIANCHE, BEVANDE)
+// - 🆕 Ingredienti/descrizione pizza sotto al nome nella card, max 2 righe, font piccolo
 // ============================================================================
 
 import { Component, OnInit, OnDestroy, computed, inject, signal } from '@angular/core';
@@ -45,17 +46,47 @@ interface CatalogItem {
   price: number;
   category?: string | null;
   categorySort?: number | null;
+  // 🆕 descrizione/ingredienti (campo products.description)
+  description?: string | null;
 }
-interface CartItem { name: string; price: number; qty: number; product_id?: number | null; notes?: string | null; extra_total?: number; }
-interface OrderItemInput { name: string; qty: number; price: number; product_id?: number | null; notes?: string | null; }
+
+interface CartItem {
+  name: string;
+  price: number;
+  qty: number;
+  product_id?: number | null;
+  notes?: string | null;
+  extra_total?: number;
+}
+interface OrderItemInput {
+  name: string;
+  qty: number;
+  price: number;
+  product_id?: number | null;
+  notes?: string | null;
+}
 interface OrderInputPayload {
-  customer_name: string; phone: string | null; note: string | null; people: number | null; channel: string;
-  items: OrderItemInput[]; reservation_id?: number; room_id?: number | null; table_id?: number | null; scheduled_at?: string | null;
+  customer_name: string;
+  phone: string | null;
+  note: string | null;
+  people: number | null;
+  channel: string;
+  items: OrderItemInput[];
+  reservation_id?: number;
+  room_id?: number | null;
+  table_id?: number | null;
+  scheduled_at?: string | null;
 }
 interface Preset {
-  id: string; baseName: string; notes: string; created_at: number;
-  removedBaseIds?: number[]; extraQty?: Record<number, number>; includeExtrasInTotal?: boolean;
+  id: string;
+  baseName: string;
+  notes: string;
+  created_at: number;
+  removedBaseIds?: number[];
+  extraQty?: Record<number, number>;
+  includeExtrasInTotal?: boolean;
 }
+
 const COVER_PRICE_EUR = 1.50;
 const RES_DEFAULT_DURATION_MIN = 90; // 🕒 durata stimata per prenotazione creata al volo
 
@@ -90,8 +121,8 @@ export class OrderBuilderPage implements OnInit, OnDestroy {
   readonly COVER_PRICE = COVER_PRICE_EUR;
 
   // 🆕 Sessione tavolo — DB sync
-  private readonly LS_SESSION='order.session_id';
-  private readonly LS_PRESETS='order.presets';
+  private readonly LS_SESSION = 'order.session_id';
+  private readonly LS_PRESETS = 'order.presets';
   sessionId   = signal<number | null>(null);
   cartVersion = signal<number>(0);
 
@@ -119,21 +150,29 @@ export class OrderBuilderPage implements OnInit, OnDestroy {
 
   async printActiveOrderBill() {
     const ord = this.activeOrder(); if (!ord?.id) return;
-    try { await firstValueFrom(this.api.print(ord.id)); console.log('🖨️ [Builder] CONTO OK', ord.id); }
-    catch (e) { console.warn('🖨️ [Builder] CONTO KO', e); }
+    try {
+      await firstValueFrom(this.api.print(ord.id));
+      console.log('🖨️ [Builder] CONTO OK', ord.id);
+    } catch (e) {
+      console.warn('🖨️ [Builder] CONTO KO', e);
+    }
   }
-  async printActiveOrderComanda(center: 'pizzeria'|'cucina' = 'pizzeria') {
+  async printActiveOrderComanda(center: 'pizzeria' | 'cucina' = 'pizzeria') {
     const ord = this.activeOrder(); if (!ord?.id) return;
-    try { await firstValueFrom(this.api.printComanda(ord.id, center, 1)); console.log('🧾 [Builder] COMANDA OK', ord.id, center); }
-    catch (e) { console.warn('🧾 [Builder] COMANDA KO', e); }
+    try {
+      await firstValueFrom(this.api.printComanda(ord.id, center, 1));
+      console.log('🧾 [Builder] COMANDA OK', ord.id, center);
+    } catch (e) {
+      console.warn('🧾 [Builder] COMANDA KO', e);
+    }
   }
 
   // 🆕 Merge dialog state (UI non mostrata in questo HTML, ma pronta)
   mergeOpen = signal<boolean>(false);
-  private _conflictServer:any = null;
-  private _conflictServerVersion:number = 0;
-  private _conflictLocal:any = null;
-  private _conflictLocalVersion:number = 0;
+  private _conflictServer: any = null;
+  private _conflictServerVersion: number = 0;
+  private _conflictLocal: any = null;
+  private _conflictLocalVersion: number = 0;
 
   // form
   customerName = signal('');  onInputName (ev:any){ this.customerName.set((ev?.detail?.value ?? ev?.target?.value ?? '').toString()); this._debouncedSaveCart(); }
@@ -142,32 +181,51 @@ export class OrderBuilderPage implements OnInit, OnDestroy {
   note         = signal('');  onInputNote (ev:any){ this.note.set((ev?.detail?.value ?? ev?.target?.value ?? '').toString()); this._debouncedSaveCart(); }
 
   // coperti
-  private readonly LS_COVERS='order.covers';
-  covers=signal<number>(0);
+  private readonly LS_COVERS = 'order.covers';
+  covers = signal<number>(0);
   incCovers(){ const n=(this.covers()||0)+1; this.covers.set(n); localStorage.setItem(this.LS_COVERS,String(n)); this._debouncedSaveCart(); }
   decCovers(){ const n=Math.max(0,(this.covers()||0)-1); this.covers.set(n); localStorage.setItem(this.LS_COVERS,String(n)); this._debouncedSaveCart(); }
 
   // catalogo
   private menuSig = signal<CatalogItem[]>([]);
 
-  // 🆕 categorie ordinate per sort_order (fallback alfabetico)
+  // 🆕 categorie ordinate per sort_order + priorità logica
+  //    ordine desiderato: ANTIPASTI → PIZZE ROSSE → PIZZE BIANCHE → BEVANDE → resto
   categories = computed(() => {
-    // mappa categoria → sort minimo trovato
-    const map = new Map<string, { name: string; sort: number }>();
+    // mappa categoria → sort minimo trovato + rank personalizzato
+    const map = new Map<string, { name: string; sort: number; rank: number }>();
+
+    const PRIORITY: Record<string, number> = {
+      'ANTIPASTI': 1,
+      'PIZZE ROSSE': 2,
+      'PIZZE BIANCHE': 3,
+      'BEVANDE': 4,
+    };
 
     for (const m of this.menuSig()) {
-      const name = (m.category ?? 'Altro').toString().trim() || 'Altro';
+      const rawName = (m.category ?? 'Altro').toString().trim() || 'Altro';
+      const name = rawName;
       const sort = (typeof m.categorySort === 'number' && !Number.isNaN(m.categorySort))
         ? m.categorySort!
         : 9999; // fallback “in fondo”
+      const upper = rawName.toUpperCase();
+      const rank = PRIORITY[upper] ?? 100; // tutto ciò che non è in priority va dopo
+
       const cur = map.get(name);
-      if (!cur || sort < cur.sort) {
-        map.set(name, { name, sort });
+      if (!cur) {
+        map.set(name, { name, sort, rank });
+      } else {
+        map.set(name, {
+          name,
+          sort: Math.min(cur.sort, sort),
+          rank: Math.min(cur.rank, rank),
+        });
       }
     }
 
     const arr = Array.from(map.values());
     arr.sort((a, b) => {
+      if (a.rank !== b.rank) return a.rank - b.rank;
       if (a.sort !== b.sort) return a.sort - b.sort;
       return a.name.localeCompare(b.name, 'it');
     });
@@ -175,10 +233,14 @@ export class OrderBuilderPage implements OnInit, OnDestroy {
     return arr.map(r => r.name);
   });
 
-  selectedCategory=signal('TUTTI');
+  // 🆕 niente più categoria "TUTTI": partiamo senza selezione e poi settiamo
+  // la prima disponibile quando carichiamo il menu
+  selectedCategory = signal<string>('');
   filteredMenu = computed(() => {
-    const cat=this.selectedCategory(); const all=this.menuSig();
-    return cat==='TUTTI' ? all : all.filter(m => (m.category ?? 'Altro')===cat);
+    const cat = this.selectedCategory();
+    const all = this.menuSig();
+    if (!cat) return all; // fallback: nessuna categoria selezionata → tutti
+    return all.filter(m => (m.category ?? 'Altro') === cat);
   });
 
   // carrello
@@ -193,13 +255,13 @@ export class OrderBuilderPage implements OnInit, OnDestroy {
   customLinesCount = computed(()=> this.cart().filter(r => !!(r.notes || '').trim()).length);
 
   // prenotazioni oggi
-  pickList=signal<Reservation[]>([]);
-  selectedReservation=signal<Reservation|null>(null);
-  reservationMeta = signal<{ id: number; table_id?: number|null; room_id?: number|null; start_at?: string|null } | null>(null);
+  pickList = signal<Reservation[]>([]);
+  selectedReservation = signal<Reservation | null>(null);
+  reservationMeta = signal<{ id: number; table_id?: number | null; room_id?: number | null; start_at?: string | null } | null>(null);
 
   // contesto tavolo
-  tableId = signal<number|null>(null);
-  roomId  = signal<number|null>(null);
+  tableId = signal<number | null>(null);
+  roomId  = signal<number | null>(null);
   createReservationOnConfirm = signal<boolean>(false);
 
   // stampa
@@ -246,10 +308,10 @@ export class OrderBuilderPage implements OnInit, OnDestroy {
   }
 
   // personalizza
-  customOpen=signal(false);
+  customOpen = signal(false);
   private _targetItem: CatalogItem | null = null;
   targetItem = () => this._targetItem;
-  modalNote=signal('');
+  modalNote = signal('');
 
   // ingredienti
   ing = signal<ProductIngredientChip[]>([]);
@@ -261,8 +323,8 @@ export class OrderBuilderPage implements OnInit, OnDestroy {
 
   allIngredients = signal<Ingredient[]>([]);
   extras = signal<Ingredient[]>([]);
-  baseRemoved=signal<Record<number,true>>({});
-  extraQty=signal<Record<number,number>>({});
+  baseRemoved = signal<Record<number,true>>({});
+  extraQty = signal<Record<number,number>>({});
 
   hasExtras = computed(()=> this.extras().length > 0);
   getExtraQty(id:number){ return this.extraQty()[id] || 0; }
@@ -412,7 +474,7 @@ export class OrderBuilderPage implements OnInit, OnDestroy {
       table_number:r.table_number ?? null, table_name:r.table_name ?? null };
   };
 
-  // 🆕 carico menu con categorySort (sort_order categoria)
+  // 🆕 carico menu con categorySort (sort_order categoria) + description
   private async _loadMenu(){
     try{
       const menu = await firstValueFrom(this.api.getMenu());
@@ -431,17 +493,30 @@ export class OrderBuilderPage implements OnInit, OnDestroy {
 
         const sort = sortRaw != null ? Number(sortRaw) : null;
 
+        const descRaw = m.description ?? m.desc ?? null;
+        const description = descRaw != null ? String(descRaw).trim() || null : null;
+
         return {
           id: m.id ?? null,
           name: m.name,
           price: Number(m.price || 0),
           category: catName,
-          categorySort: (sort != null && !Number.isNaN(sort)) ? sort : null
+          categorySort: (sort != null && !Number.isNaN(sort)) ? sort : null,
+          description
         };
       });
 
       this.menuSig.set(norm);
       console.log('📥 [OrderBuilder] menu items:', this.menuSig().length);
+
+      // 🆕 se non ho ancora una categoria selezionata, prendo la prima disponibile
+      if (!this.selectedCategory()) {
+        const cats = this.categories();
+        if (cats.length) {
+          this.selectedCategory.set(cats[0]);
+          console.log('📂 [OrderBuilder] categoria default:', cats[0]);
+        }
+      }
     }catch(e){
       console.error('💥 [OrderBuilder] getMenu KO', e);
       this.menuSig.set([]);

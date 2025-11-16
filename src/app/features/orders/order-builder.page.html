@@ -215,12 +215,15 @@
     <ion-segment
       class="order-category-segment"
       mode="ios"
+      scrollable="true"
       [value]="selectedCategory()"
       (ionChange)="selectedCategory.set($any($event.detail).value)"
     >
+      <!--
       <ion-segment-button value="TUTTI">
         <ion-label>TUTTI</ion-label>
       </ion-segment-button>
+      -->
       <ion-segment-button *ngFor="let c of categories()" [value]="c">
         <ion-label>{{ c }}</ion-label>
       </ion-segment-button>
@@ -241,6 +244,21 @@
             </ion-card-title>
           </ion-card-header>
           <ion-card-content>
+            <!-- 🆕 descrizione / ingredienti sotto il nome pizza (max ~2 righe, font piccolo) -->
+            <div
+              *ngIf="m.description"
+              style="
+                font-size: 0.78rem;
+                line-height: 1.3;
+                opacity: 0.85;
+                margin-bottom: 6px;
+                max-height: calc(1.3em * 2);
+                overflow: hidden;
+              "
+            >
+              {{ m.description }}
+            </div>
+
             <div class="actions">
               <ion-button size="small" fill="outline" (click)="decCartByBaseName(m.name)">−</ion-button>
               <ion-badge color="tertiary">{{ qtyInCart(m.name) }}</ion-badge>

@@ -310,7 +310,14 @@
               style="margin-left: 6px"
             ></ion-icon>
           </div>
-          <div>× {{ l.qty }}</div>
+          <div>
+            <ng-container *ngIf="lineAgeLabel(l) as age; else qtyOnly">
+              <small>{{ age }} · x{{ l.qty }}</small>
+            </ng-container>
+            <ng-template #qtyOnly>
+              × {{ l.qty }}
+            </ng-template>
+          </div>
         </div>
 
         <div>
@@ -359,7 +366,22 @@
     </div>
     <div style="display: flex; gap: 8px">
       <ion-button size="small" fill="outline" (click)="clearCart()">Svuota</ion-button>
-      <ion-button size="small" (click)="confirmOrder()">Conferma ordine</ion-button>
+
+      <!-- 🆕 Bottone conferma con stato "Invio..." e disable su submit -->
+      <ion-button
+        size="small"
+        [disabled]="submitting() || cart().length === 0"
+        (click)="confirmOrder()"
+      >
+        <ion-spinner
+          *ngIf="submitting()"
+          name="dots"
+          slot="start"
+          style="margin-right: 4px"
+        ></ion-spinner>
+        <span *ngIf="!submitting()">Conferma ordine</span>
+        <span *ngIf="submitting()">Invio…</span>
+      </ion-button>
     </div>
 
     <!-- mini-riepilogo extra per riga -->
@@ -497,4 +519,14 @@
       </ion-content>
     </ng-template>
   </ion-modal>
+
+  <!-- 🆕 Toast di feedback globale (ordine creato, errori, aggiunte, ecc.) -->
+  <ion-toast
+    [isOpen]="toastOpen()"
+    [message]="toastMessage()"
+    [color]="toastColor()"
+    duration="2000"
+    position="top"
+    (didDismiss)="toastOpen.set(false)"
+  ></ion-toast>
 </ion-content>

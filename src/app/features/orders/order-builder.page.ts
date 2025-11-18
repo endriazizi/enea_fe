@@ -16,6 +16,8 @@
 // - 🆕 Ordine attivo per sessione + pulsanti stampa conto/comanda
 // - 🆕 Categorie ordinate via sort_order (con priorità: ANTIPASTI, PIZZE ROSSE, PIZZE BIANCHE, BEVANDE)
 // - 🆕 Ingredienti/descrizione pizza sotto al nome nella card, max 2 righe, font piccolo
+// - 🆕 Feeling waiter: stato “Invio…”, toast di feedback, chiusura modale su aggiunta custom
+// - 🆕 Tracciamento “aggiunto da X sec/min/h/gg” per ogni riga (persistito per sessione)
 // ============================================================================
 
 import { Component, OnInit, OnDestroy, computed, inject, signal } from '@angular/core';
@@ -25,7 +27,7 @@ import {
   IonContent, IonItem, IonLabel, IonInput, IonTextarea, IonList,
   IonBadge, IonNote, IonSegment, IonSegmentButton,
   IonGrid, IonRow, IonCol, IonCard, IonCardHeader, IonCardTitle, IonCardContent,
-  IonFooter, IonModal, IonSelect, IonSelectOption, IonIcon, IonChip, IonToggle, IonSpinner
+  IonFooter, IonModal, IonSelect, IonSelectOption, IonIcon, IonChip, IonToggle, IonSpinner, IonToast
 } from '@ionic/angular/standalone';
 import { Router, ActivatedRoute } from '@angular/router';
 import { firstValueFrom } from 'rxjs';
@@ -57,6 +59,8 @@ interface CartItem {
   product_id?: number | null;
   notes?: string | null;
   extra_total?: number;
+  // 🆕 timestamp epoch ms dell’ultima aggiunta (per label "aggiunto da …")
+  added_at?: number;
 }
 interface OrderItemInput {
   name: string;
@@ -102,7 +106,7 @@ const RES_DEFAULT_DURATION_MIN = 90; // 🕒 durata stimata per prenotazione cre
     IonBadge, IonNote, IonSegment, IonSegmentButton,
     IonGrid, IonRow, IonCol, IonCard, IonCardHeader, IonCardTitle, IonCardContent,
     IonFooter, IonModal, IonSelect, IonSelectOption, IonIcon, IonChip, IonToggle,
-    IonSpinner
+    IonSpinner, IonToast
   ]
 })
 export class OrderBuilderPage implements OnInit, OnDestroy {
@@ -129,6 +133,19 @@ export class OrderBuilderPage implements OnInit, OnDestroy {
   // === Stato & azioni “Ordine attivo” ========================================
   activeOrder = signal<any | null>(null);
   activeOrderLoading = signal<boolean>(false);
+
+  // 🆕 Stato invio ordine + toast di feedback
+  submitting = signal<boolean>(false);
+
+  toastOpen    = signal<boolean>(false);
+  toastMessage = signal<string>('');
+  toastColor   = signal<'success' | 'danger' | 'medium'>('success');
+
+  private _openToast(msg: string, color: 'success' | 'danger' | 'medium' = 'success') {
+    this.toastMessage.set(msg);
+    this.toastColor.set(color);
+    this.toastOpen.set(true);
+  }
 
   private async _loadActiveOrderForSession(sid: number | null) {
     if (!sid) {
@@ -253,6 +270,34 @@ export class OrderBuilderPage implements OnInit, OnDestroy {
   hasExtrasInCart = computed(()=> this.cart().some(l => (l.extra_total||0) > 0));
   total = computed(()=> this.cartBaseTotal() + (this.includeExtrasInTotal()? this.cartExtrasTotal():0) + (this.covers()>0 ? this.covers()*this.COVER_PRICE : 0));
   customLinesCount = computed(()=> this.cart().filter(r => !!(r.notes || '').trim()).length);
+
+  // 🆕 label "aggiunto da X …" in base al timestamp di riga
+  lineAgeLabel(line: CartItem): string {
+    const at = line.added_at;
+    if (!at || Number.isNaN(at)) return '';
+    const diffMs = Date.now() - at;
+    if (diffMs < 0) return '';
+    const diffSecTotal = Math.floor(diffMs / 1000);
+
+    const sec = diffSecTotal;
+    if (sec < 60) {
+      const v = sec || 1;
+      return v === 1 ? 'aggiunto da 1 sec' : `aggiunto da ${v} sec`;
+    }
+
+    const min = Math.floor(sec / 60);
+    if (min < 60) {
+      return min === 1 ? 'aggiunto da 1 min' : `aggiunto da ${min} min`;
+    }
+
+    const h = Math.floor(min / 60);
+    if (h < 24) {
+      return h === 1 ? 'aggiunto da 1 h' : `aggiunto da ${h} h`;
+    }
+
+    const d = Math.floor(h / 24);
+    return d === 1 ? 'aggiunto da 1 gg' : `aggiunto da ${d} gg`;
+  }
 
   // prenotazioni oggi
   pickList = signal<Reservation[]>([]);
@@ -560,16 +605,39 @@ export class OrderBuilderPage implements OnInit, OnDestroy {
   hasCustomFor(baseName:string){ return this.cart().some(r=>r.name===baseName && !!(r.notes||'').trim()); }
   incCartByBaseName(baseName:string, m?:CatalogItem){
     const price=Number((m as any)?.price ?? this.cart().find(r=>r.name===baseName)?.price ?? 0);
-    const next=[...this.cart()]; const idx=next.findIndex(r=>r.name===baseName && !r.notes);
-    if(idx>=0) next[idx]={...next[idx], qty:next[idx].qty+1};
-    else next.push({ name:baseName, price, qty:1, product_id:(m as any)?.id ?? null, notes:null, extra_total:0 });
+    const next=[...this.cart()];
+    const idx=next.findIndex(r=>r.name===baseName && !r.notes);
+    if(idx>=0){
+      // NB: qui lasciamo invariato added_at; la "storia" delle aggiunte puntuali la tracciamo su incLine
+      next[idx]={...next[idx], qty:next[idx].qty+1};
+    }else{
+      next.push({
+        name:baseName,
+        price,
+        qty:1,
+        product_id:(m as any)?.id ?? null,
+        notes:null,
+        extra_total:0,
+        added_at: Date.now() // 🆕 prima aggiunta di questa riga
+      });
+    }
     this.cart.set(next); this._debouncedSaveCart();
   }
   decCartByBaseName(baseName:string){
     const next=[...this.cart()]; const idx=next.findIndex(r=>r.name===baseName && !r.notes);
     if(idx>=0){ const cur={...next[idx]}; cur.qty=Math.max(0,cur.qty-1); if(cur.qty===0) next.splice(idx,1); else next[idx]=cur; this.cart.set(next); this._debouncedSaveCart(); }
   }
-  incLine(line:CartItem){ this.cart.set(this.cart().map(r=> r===line ? {...r, qty:r.qty+1} : r)); this._debouncedSaveCart(); }
+  incLine(line:CartItem){
+    const now = Date.now();
+    this.cart.set(
+      this.cart().map(r =>
+        r === line
+          ? { ...r, qty: r.qty + 1, added_at: now } // 🆕 aggiorno timestamp ultima aggiunta
+          : r
+      )
+    );
+    this._debouncedSaveCart();
+  }
   decLine(line:CartItem){
     const next=[...this.cart()]; const idx=next.indexOf(line);
     if(idx>=0){
@@ -702,13 +770,21 @@ export class OrderBuilderPage implements OnInit, OnDestroy {
   addCustomToCartFromModal(){
     const t=this._targetItem; if(!t) return;
     const line:CartItem={
-      name:t.name, price:Number(t.price||0), qty:1, product_id:t.id ?? null,
+      name:t.name,
+      price:Number(t.price||0),
+      qty:1,
+      product_id:t.id ?? null,
       notes:(this._buildNotesFromSelections() || null),
-      extra_total:this.extraCostPreview() || 0
+      extra_total:this.extraCostPreview() || 0,
+      added_at: Date.now()
     };
     this.cart.set([...this.cart(), line]);
     console.log('🧾➕ added custom line', line);
     this._debouncedSaveCart();
+
+    // 🆕 UX: chiudo il modal e mostro un piccolo toast
+    this.customOpen.set(false);
+    this._openToast(`Aggiunto 1× ${t.name}`, 'success');
   }
 
   // ======================= Snapshot ⇄ Restore (DB) ==========================
@@ -724,8 +800,13 @@ export class OrderBuilderPage implements OnInit, OnDestroy {
       room_id: this.roomId(),
       reservation_meta: this.reservationMeta(),
       items: this.cart().map(r => ({
-        name: r.name, price: r.price, qty: r.qty, product_id: r.product_id ?? null,
-        notes: r.notes ?? null, extra_total: r.extra_total ?? 0
+        name: r.name,
+        price: r.price,
+        qty: r.qty,
+        product_id: r.product_id ?? null,
+        notes: r.notes ?? null,
+        extra_total: r.extra_total ?? 0,
+        added_at: r.added_at ?? null
       }))
     };
   }
@@ -743,8 +824,13 @@ export class OrderBuilderPage implements OnInit, OnDestroy {
       this.roomId.set(s.room_id ?? this.roomId());
       if (s.reservation_meta && typeof s.reservation_meta === 'object') this.reservationMeta.set(s.reservation_meta);
       const items:CartItem[] = Array.isArray(s.items) ? s.items.map((r:any) => ({
-        name: String(r.name), price: Number(r.price||0), qty: Number(r.qty||0),
-        product_id: r.product_id ?? null, notes: r.notes ?? null, extra_total: Number(r.extra_total||0)
+        name: String(r.name),
+        price: Number(r.price||0),
+        qty: Number(r.qty||0),
+        product_id: r.product_id ?? null,
+        notes: r.notes ?? null,
+        extra_total: Number(r.extra_total||0),
+        added_at: (r.added_at != null && !Number.isNaN(Number(r.added_at))) ? Number(r.added_at) : undefined
       })) : [];
       this.cart.set(items);
     }catch(e){ console.warn('⚠️ _restoreCartFromSnapshot KO', e); }
@@ -797,7 +883,7 @@ export class OrderBuilderPage implements OnInit, OnDestroy {
     const note   = (this.note() || '').trim() || null;
 
     const start = new Date();
-    const end   = new Date(start.getTime() + RES_DEFAULT_DURATION_MIN*60*1000);
+       const end   = new Date(start.getTime() + RES_DEFAULT_DURATION_MIN*60*1000);
 
     const payload:any = {
       customer_first: first || null,
@@ -833,6 +919,14 @@ export class OrderBuilderPage implements OnInit, OnDestroy {
   }
 
   async confirmOrder(){
+    // 🆕 blocco doppio tap + carrello vuoto
+    if (this.submitting()) return;
+    if (!this.cart().length) {
+      this._openToast('Carrello vuoto: aggiungi almeno un articolo 👍', 'medium');
+      return;
+    }
+
+    this.submitting.set(true);
     try{
       await this._maybeCreateReservationOnConfirm();
 
@@ -841,11 +935,18 @@ export class OrderBuilderPage implements OnInit, OnDestroy {
         name:r.name, qty:r.qty, price:Number(r.price)+(includeExtras?Number(r.extra_total||0):0),
         product_id:r.product_id ?? null, notes:r.notes ?? null
       }));
-      if(this.covers()>0){ items.push({ name:'Coperto', qty:this.covers(), price:COVER_PRICE_EUR, product_id:null, notes:null }); }
+      if(this.covers()>0){
+        items.push({ name:'Coperto', qty:this.covers(), price:COVER_PRICE_EUR, product_id:null, notes:null });
+      }
 
-      const payload:OrderInputPayload={ customer_name:(this.customerName()||'Cliente').trim(),
-        phone:(this.customerPhone()||'').trim() || null, note:(this.note()||'').trim() || null,
-        people:this.covers() || null, channel:'admin', items };
+      const payload:OrderInputPayload={
+        customer_name:(this.customerName()||'Cliente').trim(),
+        phone:(this.customerPhone()||'').trim() || null,
+        note:(this.note()||'').trim() || null,
+        people:this.covers() || null,
+        channel:'admin', // per ora usiamo admin; più avanti waiter/takeaway/delivery
+        items
+      };
 
       const meta=this.reservationMeta();
       if(meta){
@@ -866,20 +967,43 @@ export class OrderBuilderPage implements OnInit, OnDestroy {
       const created:any = await firstValueFrom(this.api.create(payload as any));
       console.log('✅ creato', created);
 
-      // Post-azione
+      // Post-azione (stampa) + messaggio per il cameriere
+      let toastMsg = `Ordine #${created.id} creato.`;
+
       if (this.printMode() === 'conto') {
-        try{ await firstValueFrom(this.api.print(created.id)); console.log('🖨️ conto OK'); }
-        catch(pe){ console.warn('🖨️ conto KO (non blocco)', pe); }
+        try{
+          await firstValueFrom(this.api.print(created.id));
+          console.log('🖨️ conto OK');
+          toastMsg += ' Conto in stampa…';
+        } catch(pe){
+          console.warn('🖨️ conto KO (non blocco)', pe);
+          toastMsg += ' ⚠️ problema durante la stampa conto.';
+        }
       } else {
         try{
           const center = this.comandaCenter();
           await firstValueFrom(this.api.printComanda(created.id, center, 1));
           console.log(`🧾 ${center.toUpperCase()} OK`);
-        }catch(ke){ console.warn('🧾 comanda KO (non blocco)', ke); }
+          toastMsg += ` Comanda ${center === 'cucina' ? 'CUCINA' : 'PIZZERIA'} inviata.`;
+        } catch(ke){
+          console.warn('🧾 comanda KO (non blocco)', ke);
+          toastMsg += ' ⚠️ problema durante l’invio comanda.';
+        }
       }
 
-      this.cart.set([]); this.customOpen.set(false); this.router.navigate(['/orders']);
-    }catch(e){ console.error('💥 create KO', e); }
+      // 🆕 feedback visivo
+      this._openToast(toastMsg, 'success');
+
+      // reset carrello + redirect lista ordini
+      this.cart.set([]);
+      this.customOpen.set(false);
+      this.router.navigate(['/orders']);
+    }catch(e){
+      console.error('💥 create KO', e);
+      this._openToast('Errore durante la creazione dell’ordine 😥', 'danger');
+    }finally{
+      this.submitting.set(false);
+    }
   }
 
   // === Socket helpers =======================================================

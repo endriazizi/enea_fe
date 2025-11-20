@@ -8,24 +8,42 @@
   flex-wrap: wrap;
   margin-bottom: 8px;
 }
-.date-ui ion-chip { --padding-start: 8px; --padding-end: 8px; }
+.date-ui ion-chip {
+  --padding-start: 8px;
+  --padding-end: 8px;
+}
 
 /* 2) Segment comodi su mobile: gap + overflow-x nativo, scrollbar nascosta */
-.filters { display: grid; gap: 8px; margin-bottom: 10px; }
-.filters .row2 { display: grid; gap: 8px; }
+.filters {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.filters .row2 {
+  display: grid;
+  gap: 8px;
+}
 
 @media (max-width: 640px) {
   .filters ion-segment[scrollable] {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
   }
-  .filters ion-segment::-webkit-scrollbar { display: none; }
-  .filters ion-segment-button { margin-right: 6px; }
+  .filters ion-segment::-webkit-scrollbar {
+    display: none;
+  }
+  .filters ion-segment-button {
+    margin-right: 6px;
+  }
 }
 
 /* === Stili esistenti (ripresi dal tuo snippet) =================== */
-.page-tables { --padding-top: 6px; }
-.room-filter ion-segment { margin-top: 4px; }
+.page-tables {
+  --padding-top: 6px;
+}
+.room-filter ion-segment {
+  margin-top: 4px;
+}
 
 .kpi-grid {
   display: grid;
@@ -33,29 +51,77 @@
   margin: 8px 0 12px;
   grid-template-columns: repeat(2, 1fr);
 }
-@media (min-width: 640px) { .kpi-grid { grid-template-columns: repeat(3, 1fr); } }
-@media (min-width: 992px) { .kpi-grid { grid-template-columns: repeat(5, 1fr); } }
+@media (min-width: 640px) {
+  .kpi-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+@media (min-width: 992px) {
+  .kpi-grid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+}
 
 .kpi {
-  border: 1px solid rgba(0,0,0,.08);
+  border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 8px;
   padding: 10px 12px;
   background: #fff;
 }
-.kpi-title { font-size: .82rem; opacity: .8; }
-.kpi-value { font-weight: 700; font-size: 1.2rem; line-height: 1.2; }
-.kpi-note { display:block; margin-top: 4px; opacity:.9; }
+.kpi-title {
+  font-size: 0.82rem;
+  opacity: 0.8;
+}
+.kpi-value {
+  font-weight: 700;
+  font-size: 1.2rem;
+  line-height: 1.2;
+}
+.kpi-note {
+  display: block;
+  margin-top: 4px;
+  opacity: 0.9;
+}
 
-ion-card { --padding-start: 12px; --padding-end: 12px; cursor: pointer; }
-ion-card.free      { border-left: 6px solid var(--ion-color-success); }
-ion-card.upcoming  { border-left: 6px solid var(--ion-color-warning); }
-ion-card.busy      { border-left: 6px solid var(--ion-color-danger); }
-ion-card.cleaning  { border-left: 6px solid var(--ion-color-primary); }
-ion-card-title { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
-ion-note { display:block; margin-top:6px; opacity:.9; }
+ion-card {
+  --padding-start: 12px;
+  --padding-end: 12px;
+  cursor: pointer;
+}
+ion-card.free {
+  border-left: 6px solid var(--ion-color-success);
+}
+ion-card.upcoming {
+  border-left: 6px solid var(--ion-color-warning);
+}
+ion-card.busy {
+  border-left: 6px solid var(--ion-color-danger);
+}
+ion-card.cleaning {
+  border-left: 6px solid var(--ion-color-primary);
+}
+ion-card-title {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+ion-note {
+  display: block;
+  margin-top: 6px;
+  opacity: 0.9;
+}
 
-.actions { --padding-start: 8px; --inner-padding-end: 8px; }
-.loading { display:flex; align-items:center; justify-content:center; padding:24px; }
+.actions {
+  --padding-start: 8px;
+  --inner-padding-end: 8px;
+}
+.loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
 
 /* 🆕 Sessione attiva: riga compatta e leggibile */
 .session {
@@ -64,4 +130,29 @@ ion-note { display:block; margin-top:6px; opacity:.9; }
   gap: 8px;
   margin-top: 6px;
 }
-.session .started { opacity: .85; }
+.session .started {
+  opacity: 0.85;
+}
+
+/* Layout split desktop/mobile */
+.split-layout {
+  display: flex;
+  flex-direction: row;
+  height: 100%;
+}
+.left-col {
+  flex: 1 1 auto;
+}
+.right-col {
+  flex: 0 0 420px;
+  border-left: 1px solid rgba(0, 0, 0, 0.08);
+  background: #fafafa;
+}
+@media (max-width: 991px) {
+  .split-layout {
+    flex-direction: column;
+  }
+  .right-col {
+    display: none;
+  }
+}

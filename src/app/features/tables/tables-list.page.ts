@@ -15,24 +15,58 @@
 // ============================================================================
 
 import {
-  Component, effect, inject, signal, computed, OnInit, OnDestroy, EffectRef
+  Component,
+  effect,
+  inject,
+  signal,
+  computed,
+  OnInit,
+  OnDestroy,
+  EffectRef,
 } from '@angular/core';
 import { CommonModule, NgFor, NgIf, DatePipe } from '@angular/common';
 import {
-  IonHeader, IonToolbar, IonTitle, IonButtons, IonButton,
-  IonContent, IonGrid, IonRow, IonCol, IonCard, IonCardHeader,
-  IonCardTitle, IonCardContent, IonBadge, IonItem, IonNote,
-  IonSegment, IonSegmentButton, IonSearchbar, IonSpinner,
-  IonModal, IonChip, IonIcon, IonLabel
+  IonHeader,
+  IonToolbar,
+  IonTitle,
+  IonButtons,
+  IonButton,
+  IonContent,
+  IonGrid,
+  IonRow,
+  IonCol,
+  IonCard,
+  IonCardHeader,
+  IonCardTitle,
+  IonCardContent,
+  IonBadge,
+  IonItem,
+  IonNote,
+  IonSegment,
+  IonSegmentButton,
+  IonSearchbar,
+  IonSpinner,
+  IonModal,
+  IonChip,
+  IonIcon,
+  IonLabel,
 } from '@ionic/angular/standalone';
-import { isPlatform } from '@ionic/angular';
+import {
+  isPlatform,
+  ActionSheetController,
+  ToastController,
+  ModalController,
+} from '@ionic/angular';
 import { Router, RouterLink } from '@angular/router';
 import { HttpClient } from '@angular/common/http';
 
-import { ReservationsApi, Room, Table, Reservation } from '../../core/reservations/reservations.service';
+import {
+  ReservationsApi,
+  Room,
+  Table,
+  Reservation,
+} from '../../core/reservations/reservations.service';
 import { DateQuickComponent } from '../reservations/_components/ui/date-quick/date-quick.component';
-
-import { ActionSheetController, ToastController, ModalController } from '@ionic/angular';
 import { MoveReservationModalComponent } from '../reservations/_components/move-reservation.modal/move-reservation.modal';
 
 // ⬇️ nostro inspector presentazionale (pane/modal) usato nel template
@@ -41,7 +75,7 @@ import { OrderInspectorComponent } from '../orders/order-inspector/order-inspect
 // 🆕 Badge sessione attiva / chiusura sessione (NFC API)
 import { NfcApi } from '../nfc/nfc.api';
 
-type TableState = 'free'|'upcoming'|'busy'|'cleaning';
+type TableState = 'free' | 'upcoming' | 'busy' | 'cleaning';
 
 export type TableCard = {
   id: number;
@@ -50,24 +84,49 @@ export type TableCard = {
   room_name: string;
   capacity: number;
   state: TableState;
-  resNow?: { id:number; start_at:string; end_at:string; customer_name:string; covers:number; kids?:number; notes?:string; has_kid_products?:boolean; checkin_at?:string|null; checkout_at?:string|null; };
-  resNext?: { id:number; start_at:string; end_at:string; customer_name:string; covers:number; checkin_at?:string|null; checkout_at?:string|null; };
+  resNow?: {
+    id: number;
+    start_at: string;
+    end_at: string | null;
+    customer_name: string;
+    covers: number;
+    kids?: number;
+    notes?: string;
+    has_kid_products?: boolean;
+    checkin_at?: string | null;
+    checkout_at?: string | null;
+  };
+  resNext?: {
+    id: number;
+    start_at: string;
+    end_at: string | null;
+    customer_name: string;
+    covers: number;
+    checkin_at?: string | null;
+    checkout_at?: string | null;
+  };
   cleaningUntilMs?: number;
   cleaningRemainingSec?: number;
 };
 
 // === Tipi leggeri per il Preview ordine (solo ciò che serve a UI) ===
-type PreviewItem = { id?:number; name:string; qty:number; price:number; notes?:string };
+type PreviewItem = {
+  id?: number;
+  name: string;
+  qty: number;
+  price: number;
+  notes?: string;
+};
 type PreviewOrder = {
-  id:number;
-  table_id?:number;
-  reservation_id?:number|null;
-  customer_name?:string;
-  people?:number;
-  phone?:string;
-  scheduled_at?:string;
-  note?:string;
-  total:number;
+  id: number;
+  table_id?: number;
+  reservation_id?: number | null;
+  customer_name?: string;
+  people?: number;
+  phone?: string;
+  scheduled_at?: string;
+  note?: string;
+  total: number;
   items: PreviewItem[];
 };
 
@@ -77,37 +136,61 @@ type PreviewOrder = {
   templateUrl: './tables-list.page.html',
   styleUrls: ['./tables-list.page.scss'],
   imports: [
-    CommonModule, NgFor, NgIf, RouterLink, DatePipe,
-    IonHeader, IonToolbar, IonTitle, IonButtons, IonButton,
-    IonContent, IonGrid, IonRow, IonCol, IonCard, IonCardHeader,
-    IonCardTitle, IonCardContent, IonBadge, IonItem, IonNote,
-    IonSegment, IonSegmentButton, IonSearchbar, IonSpinner,
+    CommonModule,
+    NgFor,
+    NgIf,
+    RouterLink,
+    DatePipe,
+    IonHeader,
+    IonToolbar,
+    IonTitle,
+    IonButtons,
+    IonButton,
+    IonContent,
+    IonGrid,
+    IonRow,
+    IonCol,
+    IonCard,
+    IonCardHeader,
+    IonCardTitle,
+    IonCardContent,
+    IonBadge,
+    IonItem,
+    IonNote,
+    IonSegment,
+    IonSegmentButton,
+    IonSearchbar,
+    IonSpinner,
     // 👇 per gli elementi usati in template:
-    IonModal, IonChip, IonIcon, IonLabel,
+    IonModal,
+    IonChip,
+    IonIcon,
+    IonLabel,
     // 👇 date quick + inspector
-    DateQuickComponent, OrderInspectorComponent
+    DateQuickComponent,
+    OrderInspectorComponent,
   ],
   providers: [ModalController, ActionSheetController, ToastController],
 })
 export class TablesListPage implements OnInit, OnDestroy {
   // === DI ===========================================================
-  private api    = inject(ReservationsApi);
+  private api = inject(ReservationsApi);
   private router = inject(Router);
-  private http   = inject(HttpClient);
-  private nfc    = inject(NfcApi); // 🆕 badge sessione/close
+  private http = inject(HttpClient);
+  private nfc = inject(NfcApi); // 🆕 badge sessione/close
 
   private actionSheet = inject(ActionSheetController);
-  private toast       = inject(ToastController);
-  private modal       = inject(ModalController);
+  private toast = inject(ToastController);
+  private modal = inject(ModalController);
 
   // === Stato UI (lista + filtri) ====================================
-  loading      = signal(true);
-  roomsSig     = signal<Room[]>([]);
+  loading = signal(true);
+  roomsSig = signal<Room[]>([]);
   tablesRawSig = signal<(Table & { room_name?: string })[]>([]);
-  dayISO       = signal(this.todayISO());
-  filterState  = signal<'all'|'free'|'upcoming'|'busy'|'cleaning'>('all');
-  filterRoomId = signal<number|0>(0);
-  filterText   = signal<string>('');
+  dayISO = signal(this.todayISO());
+  filterState = signal<'all' | 'free' | 'upcoming' | 'busy' | 'cleaning'>('all');
+  filterRoomId = signal<number | 0>(0);
+  filterText = signal<string>('');
 
   private reservationsTodaySig = signal<Reservation[]>([]);
 
@@ -117,167 +200,247 @@ export class TablesListPage implements OnInit, OnDestroy {
   private timerId: any = null;
 
   // loading flags per i bottoni
-  checkInLoadingId  = signal<number|null>(null);
-  checkOutLoadingId = signal<number|null>(null);
+  checkInLoadingId = signal<number | null>(null);
+  checkOutLoadingId = signal<number | null>(null);
 
-  // === Viewport (split vs modal) ====================================
-  private vp = signal<{w:number;h:number}>({ w: window.innerWidth, h: window.innerHeight });
-  private onResize = () => this.vp.set({ w: window.innerWidth, h: window.innerHeight });
+  // viewport (per split layout desktop/mobile)
+  vp = signal<{ w: number; h: number }>({
+    w: window.innerWidth,
+    h: window.innerHeight,
+  });
+  onResize = () =>
+    this.vp.set({
+      w: window.innerWidth,
+      h: window.innerHeight,
+    });
   isDesktop = () => this.vp().w >= 992; // usato nel template come funzione
 
   // === Piattaforma (mode dinamico per i segment) =====================
   isIOS = isPlatform('ios');
 
   // === Preview ordine (split panel + modal) =========================
-  previewOpen   = signal<boolean>(false);
-  previewTable  = signal<TableCard|null>(null);
-  previewBusy   = signal<boolean>(false);
-  previewList   = signal<PreviewOrder[]>([]);      // ordini recenti del tavolo (se >1)
-  previewActive = signal<PreviewOrder|null>(null); // quello selezionato/attivo
+  previewOpen = signal<boolean>(false);
+  previewTable = signal<TableCard | null>(null);
+  previewBusy = signal<boolean>(false);
+  previewList = signal<PreviewOrder[]>([]); // ordini recenti del tavolo (se >1)
+  previewActive = signal<PreviewOrder | null>(null); // quello selezionato/attivo
 
   // === KPI ==========================================================
-  private sumBy = <T>(arr: T[], pick: (x:T)=>number) => (arr || []).reduce((a,c)=>a+(+pick(c)||0),0);
+  private sumBy = <T>(arr: T[], pick: (x: T) => number) =>
+    (arr || []).reduce((a, c) => a + (+pick(c) || 0), 0);
 
-  kpiPeopleTotal   = computed(() => this.sumBy(this.reservationsTodaySig(), r => Number(r.party_size || 0)));
-  kpiPeopleCheckIn = computed(() => this.sumBy(this.tablesSig().filter(t => t.state==='busy' && t.resNow), t => Number(t.resNow!.covers || 0)));
-  kpiTablesBusy    = computed(() => this.tablesSig().filter(t => t.state==='busy').length);
-  kpiTablesUpcoming= computed(() => this.tablesSig().filter(t => t.state==='upcoming').length);
-  kpiTablesFree    = computed(() => this.tablesSig().filter(t => t.state==='free').length);
-  kpiFreeSeatsTotal= computed(() => this.sumBy(this.tablesSig().filter(t => t.state==='free'), t => t.capacity || 0));
+  kpiPeopleTotal = computed(() =>
+    this.sumBy(
+      this.reservationsTodaySig(),
+      (r) => Number((r as any).party_size || (r as any).covers || 0),
+    ),
+  );
+  kpiPeopleCheckIn = computed(() =>
+    this.sumBy(
+      this.tablesSig().filter((t) => t.state === 'busy' && t.resNow),
+      (t) => Number(t.resNow!.covers || 0),
+    ),
+  );
+  kpiTablesBusy = computed(
+    () => this.tablesSig().filter((t) => t.state === 'busy').length,
+  );
+  kpiTablesUpcoming = computed(
+    () => this.tablesSig().filter((t) => t.state === 'upcoming').length,
+  );
+  kpiTablesFree = computed(
+    () => this.tablesSig().filter((t) => t.state === 'free').length,
+  );
+  kpiFreeSeatsTotal = computed(() =>
+    this.sumBy(
+      this.tablesSig().filter((t) => t.state === 'free'),
+      (t) => t.capacity || 0,
+    ),
+  );
   kpiFreeSeatsDist = computed(() => {
     const m = new Map<number, number>();
-    for (const f of this.tablesSig().filter(t => t.state==='free')) {
-      const c = f.capacity || 0; if (!c) continue; m.set(c, (m.get(c) || 0) + 1);
+    for (const f of this.tablesSig().filter((t) => t.state === 'free')) {
+      const c = f.capacity || 0;
+      if (!c) continue;
+      m.set(c, (m.get(c) || 0) + 1);
     }
-    return [...m.entries()].sort((a,b)=>a[0]-b[0]).map(([cap,count]) => `${cap}×${count}`).join(' • ');
+    return [...m.entries()]
+      .sort((a, b) => a[0] - b[0])
+      .map(([cap, count]) => `${cap}×${count}`)
+      .join(' • ');
   });
 
-  // 🆕 Sessioni attive (badge)
-  activeMap = signal<Record<number,{ session_id:number; started_at:string|null; updated_at?:string|null }>>({});
-  hasActive = (id:number) => !!this.activeMap()[id];
-  activeFor = (id:number) => this.activeMap()[id] || null;
+  // === Sessione attiva (NFC/QR) =====================================
+  activeMap = signal<
+    Record<number, { session_id: number; started_at: string | null; updated_at?: string | null }>
+  >({});
+  hasActive = (tableId: number) => !!this.activeMap()[tableId];
+  activeFor = (tableId: number) => this.activeMap()[tableId] || null;
 
+  // === Effetti ======================================================
   private logFiltersEffect?: EffectRef;
 
   constructor() {
-    // effect in injection context (fix NG0203)
+    // piccolo log reattivo per capire come ci muoviamo con i filtri
     this.logFiltersEffect = effect(() => {
-      console.log('🧭 [TablesList] filters:', { day: this.dayISO(), state: this.filterState(), room: this.filterRoomId(), text: this.filterText() });
+      console.log('🧭 [TablesList] filters:', {
+        day: this.dayISO(),
+        state: this.filterState(),
+        room: this.filterRoomId(),
+        text: this.filterText(),
+      });
     });
   }
 
   ngOnInit() {
     this.reload();
-    this.timerId = setInterval(() => this.tick.update(v => v + 1), 1000);
+    this.timerId = setInterval(() => this.tick.update((v) => v + 1), 1000);
     window.addEventListener('resize', this.onResize, { passive: true });
 
     // hook socket best-effort (pulizia override via evento)
     try {
-      const w: any = (window as any);
+      const w: any = window as any;
       const socket = w?.__tables_socket || w?.socket || null;
       if (socket && !w.__tables_list_hooked) {
         w.__tables_list_hooked = true;
-        socket.on('reservation-checkout', (payload: { table_id?: number|null, cleaning_until?: string }) => {
-          const tId = Number(payload?.table_id || 0);
-          const untilIso = payload?.cleaning_until || null;
-          if (!tId || !untilIso) return;
-          const until = new Date(untilIso).getTime();
-          const cloned = new Map(this.cleaningOverride());
-          cloned.set(tId, until);
-          this.cleaningOverride.set(cloned);
-          console.log('🔵 [Tables] cleaning override via socket', { table_id: tId, untilIso });
-        });
+        socket.on(
+          'reservation-checkout',
+          (payload: { table_id?: number | null; cleaning_until?: string }) => {
+            const id = Number(payload?.table_id || 0);
+            if (!id) return;
+            const until = payload?.cleaning_until
+              ? new Date(payload.cleaning_until).getTime()
+              : 0;
+            console.log('🔵 [TablesList] checkout socket per tavolo', id, '→', until);
+            this.cleaningOverride.update((old) => {
+              const m = new Map(old || new Map());
+              if (until) m.set(id, until);
+              else m.delete(id);
+              return m;
+            });
+          },
+        );
       }
     } catch (e) {
-      console.warn('⚠️ socket hook non disponibile', e);
+      console.warn('ℹ️ [TablesList] socket hook non disponibile', e);
     }
   }
 
   ngOnDestroy() {
     if (this.timerId) clearInterval(this.timerId);
-    this.logFiltersEffect?.destroy();
     window.removeEventListener('resize', this.onResize);
+    if (this.logFiltersEffect) this.logFiltersEffect.destroy();
   }
 
-  // === Picker giorno ================================================
-  selectedDayForPicker = () => this.dayISO();
-  onQuickFilterDay = (iso: string) => { this.dayISO.set(iso); this.reload(); };
+  // === Helpers data =================================================
+  private todayISO(): string {
+    const d = new Date();
+    return d.toISOString().slice(0, 10);
+  }
 
-  roomOptions = computed(() => [{ id: 0, name: 'Tutte' }, ...this.roomsSig().map(r => ({ id: r.id, name: r.name }))]);
+  selectedDayForPicker(): string {
+    return this.dayISO();
+  }
 
-  // === Costruzione card =============================================
-  private CLEAN_SEC = 5 * 60; // 5 minuti
+  onQuickFilterDay(iso: string) {
+    console.log('📅 [TablesList] quick filter day', iso);
+    this.dayISO.set(iso);
+    this.reload();
+  }
 
+  roomOptions = computed(() => [
+    { id: 0, name: 'Tutte' },
+    ...this.roomsSig().map((r) => ({ id: r.id, name: r.name })),
+  ]);
+
+  private readonly CLEAN_SEC = 5 * 60; // 5 minuti dopo fine effettiva
+
+  // === Computed tavoli (stato + pulizia) ============================
   tablesSig = computed<TableCard[]>(() => {
-    this.tick(); // aggiorna countdown
-
     const day = this.dayISO();
-    const isToday = (day === this.todayISO());
     const now = new Date();
     const nowMs = now.getTime();
-
-    const res = this.reservationsTodaySig();
-    const byTable = groupBy(res, r => Number((r as any).table_id || 0));
+    const isToday = day === this.todayISO();
+    const resAll = this.reservationsTodaySig();
+    const byTable = groupBy(resAll, (r) => Number((r as any).table_id || 0));
     const override = this.cleaningOverride();
+    const list = this.tablesRawSig() || [];
 
-    return this.tablesRawSig().map(t => {
-      // ⚠️ FIX legacy: non filtrare con end_at nullo
-      const list = (byTable.get(Number(t.id)) || []).filter(r => !!r.start_at);
-      const [byTimeNow, byTimeNext] = pickNowAndNext(list, day, isToday ? now : null);
+    return list.map((t) => {
+      const tableId = Number((t as any).id);
+      const listRes = byTable.get(tableId) || [];
 
-      // 🧠 occupante = ora in fascia OR check-in aperto (no checkout)
-      const checkedIn = findCheckedIn(list);
-      let resNow = byTimeNow || checkedIn || undefined;
-      let resNext = (!resNow ? byTimeNext : undefined);
+      const checkedIn = findCheckedIn(listRes);
+      const [byTimeNow, byTimeNext] = pickNowAndNext(listRes, day, now);
 
-      let state: TableState = resNow ? 'busy' : (resNext ? 'upcoming' : 'free');
+      let resNow: Reservation | undefined =
+        (checkedIn as Reservation | null) || (byTimeNow as Reservation | undefined) || undefined;
+      let resNext: Reservation | undefined =
+        resNow ? (byTimeNext as Reservation | undefined) : (byTimeNext as Reservation | undefined);
+
+      let state: TableState = resNow ? 'busy' : resNext ? 'upcoming' : 'free';
 
       // Pulizia (solo FE): ultima fine effettiva + override (socket/Libera ora)
       let cleaningUntilMs: number | undefined;
       if (!resNow && !resNext) {
-        const last = lastEndTodayBefore(list, day, now);
+        const last = lastEndTodayBefore(listRes, day, now);
         const candidateFromEnd = last ? last.getTime() + this.CLEAN_SEC * 1000 : 0;
 
-        const hasOverride = override.has(t.id);
-        const ov = hasOverride ? override.get(t.id)! : undefined;
-        const effective = (ov !== undefined) ? ov : candidateFromEnd;
+        const hasOverride = override.has(tableId);
+        const ov = hasOverride ? override.get(tableId)! : undefined;
+        const effective = ov !== undefined ? ov : candidateFromEnd;
 
         if (isToday && effective > nowMs) {
           state = 'cleaning';
           cleaningUntilMs = effective;
         }
       }
-      const remaining = cleaningUntilMs ? Math.max(0, Math.floor((cleaningUntilMs - nowMs)/1000)) : undefined;
+
+      const remaining = cleaningUntilMs
+        ? Math.max(0, Math.floor((cleaningUntilMs - nowMs) / 1000))
+        : undefined;
 
       return {
-        id: t.id,
-        number: String((t as any).table_number || (t as any).label || t.id),
+        id: tableId,
+        number: String(
+          (t as any).table_number || (t as any).label || (t as any).name || tableId,
+        ),
         room_id: (t as any).room_id!,
         room_name: (t as any).room_name || '',
         capacity: Number((t as any).capacity ?? (t as any).seats ?? 0),
         state,
-        resNow : resNow  ? decorateRes(resNow)      : undefined,
+        resNow: resNow ? decorateRes(resNow) : undefined,
         resNext: resNext ? decorateResNext(resNext) : undefined,
         cleaningUntilMs,
-        cleaningRemainingSec: remaining
-      };
+        cleaningRemainingSec: remaining,
+      } as TableCard;
     });
   });
 
   tablesFilteredSig = computed<TableCard[]>(() => {
-    const state = this.filterState(); const roomId = this.filterRoomId(); const txt = (this.filterText() || '').toLowerCase().trim();
-    return this.tablesSig().filter(t => {
-      if (state !== 'all' && t.state !== state) return false;
-      if (roomId && t.room_id !== roomId) return false;
-      if (!txt) return true;
-      const pool = [
-        t.number, t.room_name,
-        t.resNow?.customer_name || '',
-        t.resNext?.customer_name || '',
-        t.resNow?.notes || ''
-      ].join(' ').toLowerCase();
-      return pool.includes(txt);
-    });
+    const state = this.filterState();
+    const room = this.filterRoomId();
+    const text = (this.filterText() || '').toLowerCase().trim();
+
+    let out = this.tablesSig();
+
+    if (state !== 'all') out = out.filter((t) => t.state === state);
+    if (room && room > 0) out = out.filter((t) => t.room_id === room);
+    if (text) {
+      out = out.filter((t) => {
+        const hay = [
+          t.number,
+          t.room_name,
+          t.resNow?.customer_name,
+          t.resNext?.customer_name,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        return hay.includes(text);
+      });
+    }
+
+    return out;
   });
 
   // === IO ===========================================================
@@ -290,256 +453,326 @@ export class TablesListPage implements OnInit, OnDestroy {
       const allTables = await this.api.listAllTablesAcrossRooms().toPromise();
       this.tablesRawSig.set(allTables || []);
 
-      const from = this.dayISO(); const to = this.dayISO();
+      const from = this.dayISO();
+      const to = this.dayISO();
       const reservations = await this.api.list({ from, to }).toPromise();
       this.reservationsTodaySig.set(reservations || []);
 
       // 🆕 Popola badge “Sessione attiva” per ogni tavolo (best-effort)
       try {
         const tables = this.tablesRawSig() || [];
-        const res = await Promise.all(
-          tables.map(async (t) => {
-            try {
-              const r:any = await this.nfc.getActiveSession(Number((t as any).id)).toPromise();
-              return { id: Number((t as any).id), r };
-            } catch {
-              return { id: Number((t as any).id), r: null };
+        const svc: any = this.nfc as any;
+
+        if (!svc || typeof svc.getActiveSession !== 'function') {
+          console.log(
+            'ℹ️ [TablesList] getActiveSession non disponibile su NfcApi → nessun badge sessione attiva',
+          );
+          this.activeMap.set({});
+        } else {
+          const res = await Promise.all(
+            tables.map(async (t) => {
+              const id = Number((t as any).id);
+              try {
+                const r = await svc.getActiveSession(id); // presumibilmente Promise
+                return { id, r };
+              } catch (err) {
+                console.warn(
+                  'ℹ️ [TablesList] getActiveSession KO per tavolo',
+                  id,
+                  err,
+                );
+                return { id, r: null };
+              }
+            }),
+          );
+          const map: Record<number, any> = {};
+          for (const { id, r } of res) {
+            if (r?.ok && r.active) {
+              map[id] = {
+                session_id: r.session_id,
+                started_at: r.started_at || null,
+                updated_at: r.updated_at || null,
+              };
             }
-          })
-        );
-        const map: Record<number, any> = {};
-        for (const { id, r } of res) {
-          if (r?.ok && r.active) {
-            map[id] = { session_id: r.session_id, started_at: r.started_at || null, updated_at: r.updated_at || null };
           }
+          this.activeMap.set(map);
+          console.log(
+            '🟢 [TablesList] sessioni attive:',
+            Object.keys(map).length,
+          );
         }
-        this.activeMap.set(map);
-        console.log('🟢 [TablesList] sessioni attive:', Object.keys(map).length);
       } catch (e) {
         console.warn('ℹ️ [TablesList] sessioni attive non disponibili', e);
         this.activeMap.set({});
       }
 
-      console.log('📊 [TablesList] rooms:', rooms?.length ?? 0, 'tables:', allTables?.length ?? 0, 'res:', reservations?.length ?? 0);
+      console.log(
+        '📊 [TablesList] rooms:',
+        rooms?.length ?? 0,
+        'tables:',
+        allTables?.length ?? 0,
+        'res:',
+        reservations?.length ?? 0,
+      );
     } catch (e) {
       console.warn('⚠️ [TablesList] reload KO', e);
-      this.roomsSig.set([]); this.tablesRawSig.set([]); this.reservationsTodaySig.set([]);
+      this.roomsSig.set([]);
+      this.tablesRawSig.set([]);
+      this.reservationsTodaySig.set([]);
       this.activeMap.set({});
     } finally {
       this.loading.set(false);
     }
   }
 
-  onFilterChange(ev: CustomEvent) { this.filterState.set(String((ev.detail as any)?.value || 'all') as any); }
-  onRoomChange(ev: CustomEvent)   { this.filterRoomId.set(Number((ev.detail as any)?.value || 0)); }
-  onSearchChange(ev: CustomEvent) { this.filterText.set(String((ev.detail as any)?.value || '')); }
+  onFilterChange(ev: CustomEvent) {
+    this.filterState.set(
+      String((ev.detail as any)?.value || 'all') as
+        | 'all'
+        | 'free'
+        | 'upcoming'
+        | 'busy'
+        | 'cleaning',
+    );
+  }
+
+  onRoomChange(ev: CustomEvent) {
+    this.filterRoomId.set(Number((ev.detail as any)?.value || 0));
+  }
+
+  onSearchChange(ev: CustomEvent) {
+    this.filterText.set(String((ev.detail as any)?.value || ''));
+  }
 
   // === Azioni base ==================================================
-  openDetails(t: TableCard)   { if (t.resNow) this.router.navigate(['/reservations', t.resNow.id, 'edit']); }
-  printKitchen(t: TableCard)  { console.log('🖨️ [TablesList] print kitchen for table', t.id); /* TODO */ }
+  openDetails(t: TableCard) {
+    if (t.resNow) {
+      this.router.navigate(['/reservations', t.resNow.id, 'edit']);
+    } else if (t.resNext) {
+      this.router.navigate(['/reservations', t.resNext.id, 'edit']);
+    } else {
+      this.router.navigate(['/reservations'], {
+        queryParams: { table_id: t.id, day: this.dayISO() },
+      });
+    }
+  }
+
+  printKitchen(t: TableCard) {
+    console.log('🖨️ [TablesList] print kitchen for table', t.id);
+    // TODO: integrazione stampa comanda rapida da lista tavoli (in futuro)
+  }
+
   newReservation(t?: TableCard) {
-    const extras = t ? { queryParams: { room_id: t.room_id, table_id: t.id } } : undefined;
-    this.router.navigate(['/reservations/new'], extras);
+    const params: any = { day: this.dayISO() };
+    if (t) params.table_id = t.id;
+    this.router.navigate(['/reservations/new'], { queryParams: params });
   }
 
-  // 🆕 Avvia Order Builder dal tavolo (prefill se c’è prenotazione)
   startOrder(t: TableCard) {
-    // preferisco la prenotazione in corso, altrimenti la prossima; se nulla → ex-novo
-    const ref = t.resNow ?? t.resNext ?? null;
-    // 🆕 passo anche room_id così Order Builder può salvarlo nel meta ordine/prenotazione
-    const queryParams: any = { table_id: t.id, room_id: t.room_id };
-    if (ref?.id) queryParams.reservation_id = ref.id;
-
-    console.log('🧾 [TablesList] startOrder ▶️', { table_id: t.id, room_id: t.room_id, reservation_id: ref?.id || null });
-    this.router.navigate(['/orders/new'], { queryParams });
+    console.log('🧾 [TablesList] startOrder tavolo', t);
+    const qp: any = {
+      table_id: t.id,
+      room_id: t.room_id,
+      room_name: t.room_name,
+    };
+    if (t.resNow) qp.reservation_id = t.resNow.id;
+    this.router.navigate(['/orders/new'], { queryParams: qp });
   }
 
-  // === Check-in =====================================================
+  // === Check-in / Check-out / Pulizia ===============================
   async checkIn(t: TableCard) {
-    const ref = t.resNext ?? t.resNow;
-    if (!ref) return;
+    if (!t.resNow) {
+      return;
+    }
+    const id = t.resNow.id;
+    this.checkInLoadingId.set(id);
     try {
-      this.checkInLoadingId.set(ref.id);
-      console.log('✅ [TablesList] check-in ▶️', { res_id: ref.id });
-      await this.api.checkIn(ref.id).toPromise(); // POST /checkin → fallback updateStatus('accept')
-      (await this.toast.create({ message: 'Check-in registrato ✅', duration: 1200 })).present();
+      console.log('✅ [TablesList] check-in tavolo/res', t.id, id);
+      await this.api.checkIn(id).toPromise();
+      this.toast
+        .create({
+          message: `Check-in eseguito per tavolo ${t.number}`,
+          duration: 2000,
+          color: 'success',
+        })
+        .then((t) => t.present());
       await this.reload();
     } catch (e) {
-      console.warn('⚠️ [TablesList] check-in KO', e);
-      (await this.toast.create({ message: 'Check-in non riuscito', color: 'warning', duration: 1600 })).present();
+      console.error('⚠️ [TablesList] check-in KO', e);
+      this.toast
+        .create({
+          message: 'Errore durante il check-in',
+          duration: 2000,
+          color: 'danger',
+        })
+        .then((t) => t.present());
     } finally {
       this.checkInLoadingId.set(null);
     }
   }
 
-  // === Check-out + Pulizia 5:00 (solo FE) ===========================
   async checkOut(t: TableCard) {
-    const ref = t.resNow;
-    if (!ref) return;
+    if (!t.resNow) return;
+    const id = t.resNow.id;
+    this.checkOutLoadingId.set(id);
     try {
-      this.checkOutLoadingId.set(ref.id);
-      console.log('🧹 [TablesList] check-out ▶️', { res_id: ref.id, table_id: t.id });
-
-      // Se disponibile, usa checkOutWithMeta → { cleaning_until }
-      const anyApi: any = this.api as any;
-      let untilMs: number | null = null;
-      if (typeof anyApi.checkOutWithMeta === 'function') {
-        const res = await anyApi.checkOutWithMeta(ref.id).toPromise();
-        if (res?.cleaning_until) untilMs = new Date(res.cleaning_until).getTime();
-      } else {
-        await this.api.checkOut(ref.id).toPromise();
-      }
-
-      // forza subito finestra pulizia in FE
-      const until = untilMs ?? (Date.now() + this.CLEAN_SEC * 1000);
-      const cloned = new Map(this.cleaningOverride());
-      cloned.set(t.id, until);
-      this.cleaningOverride.set(cloned);
-
-      (await this.toast.create({ message: 'Tavolo chiuso • Pulizia 5:00 🔵', duration: 1400 })).present();
+      console.log('⬅️ [TablesList] check-out tavolo/res', t.id, id);
+      await this.api.checkOut(id).toPromise();
+      this.toast
+        .create({
+          message: `Check-out eseguito per tavolo ${t.number}`,
+          duration: 2000,
+          color: 'success',
+        })
+        .then((t) => t.present());
       await this.reload();
     } catch (e) {
-      console.warn('⚠️ [TablesList] check-out KO', e);
-      (await this.toast.create({ message: 'Check-out non riuscito', color: 'warning', duration: 1600 })).present();
+      console.error('⚠️ [TablesList] check-out KO', e);
+      this.toast
+        .create({
+          message: 'Errore durante il check-out',
+          duration: 2000,
+          color: 'danger',
+        })
+        .then((t) => t.present());
     } finally {
       this.checkOutLoadingId.set(null);
     }
   }
 
   async freeNow(t: TableCard) {
-    // 🔓 Override esplicito: metto l'istante attuale → vince sul default
-    const map = new Map(this.cleaningOverride());
-    map.set(t.id, Date.now()); // scade adesso → torna 🟢 free
-    this.cleaningOverride.set(map);
-    (await this.toast.create({ message: 'Tavolo liberato ✅', duration: 900 })).present();
-  }
-
-  // 🆕 Chiusura sessione NFC/QR dal tavolo
-  async closeSession(t: TableCard) {
-    try {
-      console.log('🧹 [TablesList] chiudi sessione ▶️', { table_id: t.id });
-      const out = await this.nfc.closeSession(t.id).toPromise();
-      // rimuovo subito il badge (ottimismo) e ricarico lista
-      const map = { ...this.activeMap() }; delete map[t.id]; this.activeMap.set(map);
-      (await this.toast.create({ message: 'Sessione chiusa ✅', duration: 1100 })).present();
-      await this.reload();
-    } catch (e) {
-      console.warn('⚠️ [TablesList] closeSession KO', e);
-      (await this.toast.create({ message: 'Impossibile chiudere la sessione', color: 'warning', duration: 1500 })).present();
-    }
-  }
-
-  // === Sposta =======================================================
-  private async moveReservation(t: TableCard) {
-    try {
-      const ref = t.resNow ?? t.resNext;
-      if (!ref) return;
-
-      const modal = await this.modal.create({
-        component: MoveReservationModalComponent,
-        componentProps: {
-          currentTableId: t.id,
-          reservation: { id: ref.id, start_at: ref.start_at, end_at: ref.end_at, covers: ref.covers, room_id: t.room_id },
-          tables: this.tablesRawSig(),
-          reservations: this.reservationsTodaySig()
-        },
-        cssClass: 'modal--move-reservation'
-      });
-      await modal.present();
-      const res = await modal.onDidDismiss<{ ok: boolean; table_id?: number }>();
-      if (!res?.data?.ok || !res.data.table_id) return;
-
-      await this.api.changeTable(ref.id, res.data.table_id).toPromise();
-      (await this.toast.create({ message: 'Prenotazione spostata ✅', duration: 1400 })).present();
-      await this.reload();
-    } catch (e) {
-      console.warn('⚠️ [TablesList] moveReservation KO', e);
-      (await this.toast.create({ message: 'Spostamento non riuscito', color: 'warning', duration: 1600 })).present();
-    }
+    // “Libera ora” → solo lato FE: ignora countdown e pulizia
+    console.log('🧹 [TablesList] Libera ora tavolo', t.id);
+    this.cleaningOverride.update((old) => {
+      const m = new Map(old || new Map());
+      m.delete(t.id);
+      return m;
+    });
+    await this.reload();
   }
 
   async openActions(t: TableCard) {
+    const buttons: any[] = [
+      {
+        text: 'Dettagli prenotazione',
+        icon: 'information-circle-outline',
+        handler: () => this.openDetails(t),
+      },
+      {
+        text: 'Nuovo ordine',
+        icon: 'receipt-outline',
+        handler: () => this.startOrder(t),
+      },
+      {
+        text: 'Nuova prenotazione',
+        icon: 'calendar-outline',
+        handler: () => this.newReservation(t),
+      },
+      {
+        text: 'Stampa comanda (TODO)',
+        icon: 'print-outline',
+        handler: () => this.printKitchen(t),
+      },
+      {
+        text: 'Check-in',
+        icon: 'log-in-outline',
+        disabled: !t.resNow,
+        handler: () => this.checkIn(t),
+      },
+      {
+        text: 'Check-out',
+        icon: 'log-out-outline',
+        disabled: !t.resNow,
+        handler: () => this.checkOut(t),
+      },
+      {
+        text: 'Libera ora (stop pulizia)',
+        icon: 'broom-outline',
+        handler: () => this.freeNow(t),
+      },
+      {
+        text: 'Annulla',
+        role: 'cancel',
+      },
+    ];
+
+    const sheet = await this.actionSheet.create({
+      header: `Tavolo ${t.number}`,
+      buttons,
+    });
+    await sheet.present();
+  }
+
+  // === Sessione attiva (chiusura) ===================================
+  async closeSession(t: TableCard) {
+    const current = this.activeFor(t.id);
+    if (!current) return;
     try {
-      const isFree = t.state === 'free';
-      const isUpcoming = t.state === 'upcoming';
-      const isBusy = t.state === 'busy';
-      const isCleaning = t.state === 'cleaning';
-
-      const buttons: any[] = [];
-      if (!isFree) buttons.push({ text: 'Dettagli', icon: 'information-circle-outline', handler: () => this.openDetails(t) });
-
-      // 🆕 Ordine sempre disponibile
-      buttons.push({ text: 'Nuovo ordine', icon: 'cart-outline', handler: () => this.startOrder(t) });
-
-      if (isUpcoming) buttons.push({ text: 'Check-in', icon: 'log-in-outline', handler: () => this.checkIn(t) });
-      if (t.resNow || t.resNext) buttons.push({ text: 'Sposta', icon: 'swap-horizontal-outline', handler: () => this.moveReservation(t) });
-      if (isBusy) {
-        buttons.push({ text: 'Chiudi tavolo', icon: 'close-circle-outline', handler: () => this.checkOut(t) });
-        buttons.push({ text: 'Stampa', icon: 'print-outline', handler: () => this.printKitchen(t) });
-      }
-      if (isCleaning) buttons.push({ text: 'Libera ora', icon: 'checkmark-done-outline', handler: () => this.freeNow(t) });
-
-      // 🆕 Azione NFC: chiudi sessione se attiva
-      if (this.hasActive(t.id)) {
-        buttons.push({ text: 'Chiudi sessione', icon: 'lock-closed-outline', handler: () => this.closeSession(t) });
-      }
-
-      if (isFree) buttons.push({ text: 'Nuova prenotazione', icon: 'add-circle-outline', handler: () => this.newReservation(t) });
-      buttons.push({ text: 'Chiudi', role: 'cancel', icon: 'close' });
-
-      const sheet = await this.actionSheet.create({ header: `Tav. ${t.number} • ${t.room_name}`, buttons });
-      await sheet.present();
+      console.log(
+        '🧲 [TablesList] close session tavolo',
+        t.id,
+        'session',
+        current.session_id,
+      );
+      // ⬇️ closeSession restituisce già un Promise → niente .toPromise()
+      await this.nfc.closeSession(current.session_id);
+      const map = { ...this.activeMap() };
+      delete map[t.id];
+      this.activeMap.set(map);
+      this.toast
+        .create({
+          message: `Sessione tavolo ${t.number} chiusa`,
+          duration: 2000,
+          color: 'success',
+        })
+        .then((t) => t.present());
     } catch (e) {
-      console.warn('⚠️ [TablesList] openActions KO', e);
+      console.error('⚠️ [TablesList] close session KO', e);
+      this.toast
+        .create({
+          message: 'Impossibile chiudere la sessione',
+          duration: 2000,
+          color: 'danger',
+        })
+        .then((t) => t.present());
     }
   }
 
-  // === Preview ordine: metodi ======================================
-  onOpenPreview(t: TableCard) {
-    // se clicco la stessa card con pannello già aperto → toggle close
-    const same = this.previewTable()?.id === t.id;
-    if (same && this.previewOpen()) { this.onClosePreview(); return; }
+  // === Preview ordine (split-desktop / modal-mobile) ================
+  async onOpenPreview(t: TableCard) {
     this.previewTable.set(t);
     this.previewOpen.set(true);
-    this.loadOrdersForTable(t).catch(err => console.warn('⚠️ [TablesList] preview load KO', err));
-  }
-
-  onClosePreview() {
-    this.previewOpen.set(false);
-    this.previewActive.set(null);
+    this.previewBusy.set(true);
     this.previewList.set([]);
-  }
+    this.previewActive.set(null);
 
-  async loadOrdersForTable(t: TableCard) {
     try {
-      this.previewBusy.set(true);
-      // 🪄 Fallback “povero”: prova a leggere gli ordini recenti del tavolo nelle ultime 6 ore
       // Endpoint atteso: GET /api/orders?table_id=...&hours=6  (se non esiste → catch)
-      const q = new URLSearchParams({ table_id: String(t.id), hours: '6' }).toString();
-      const data = await this.http.get<any[]>(`/api/orders?${q}`).toPromise();
-
-      // Normalizzo al formato PreviewOrder
-      const list: PreviewOrder[] = (data || []).map((o: any) => ({
-        id: Number(o.id),
-        table_id: Number(o.table_id || t.id),
-        reservation_id: o.reservation_id ?? null,
-        customer_name: o.customer_name || o.customer_fullname || '',
-        people: Number(o.people || o.covers || 0) || undefined,
-        phone: o.phone || '',
-        scheduled_at: o.created_at || o.updated_at || o.scheduled_at || null,
-        note: o.note || '',
-        total: toNum(o.total || 0),
+      const url = `/api/orders?table_id=${t.id}&hours=6`;
+      console.log('🔍 [TablesList] load preview ordini tavolo', t.id, url);
+      const data: any = await this.http.get(url).toPromise();
+      const list: PreviewOrder[] = (data?.orders || data || []).map((o: any) => ({
+        id: o.id,
+        table_id: o.table_id,
+        reservation_id: o.reservation_id,
+        customer_name: o.customer_name,
+        people: o.people,
+        phone: o.phone,
+        scheduled_at: o.scheduled_at,
+        note: o.note,
+        total: Number(o.total || 0),
         items: (o.items || []).map((it: any) => ({
-          id: it.id, name: String(it.name || it.title || 'ITEM'),
-          qty: toNum(it.qty || 1, 1), price: toNum(it.price || 0),
-          notes: (it.notes || it.note || '').trim() || undefined
-        }))
+          id: it.id,
+          name: it.name,
+          qty: it.qty,
+          price: it.price,
+          notes: it.notes || '',
+        })),
       }));
-
       this.previewList.set(list);
       this.previewActive.set(list[0] || null);
     } catch (e) {
-      console.warn('⚠️ [TablesList] /api/orders non disponibile, uso stato vuoto', e);
+      console.warn('ℹ️ [TablesList] preview ordini non disponibile', e);
       this.previewList.set([]);
       this.previewActive.set(null);
     } finally {
@@ -547,72 +780,105 @@ export class TablesListPage implements OnInit, OnDestroy {
     }
   }
 
+  onClosePreview() {
+    this.previewOpen.set(false);
+    this.previewTable.set(null);
+    this.previewList.set([]);
+    this.previewActive.set(null);
+  }
+
   openInBuilderFromPreview() {
-    const tbl = this.previewTable();
-    const ord = this.previewActive();
-    if (!tbl) return;
-    const queryParams: any = { table_id: tbl.id, room_id: tbl.room_id };
-    if (ord?.reservation_id) queryParams.reservation_id = ord.reservation_id;
-    console.log('🧱 [TablesList] Apri nel builder ▶️', queryParams);
-    this.router.navigate(['/orders/new'], { queryParams });
+    const t = this.previewTable();
+    if (!t) return;
+    this.startOrder(t);
   }
 
   printBillFromPreview() {
-    const ord = this.previewActive();
-    console.log('🧾 [TablesList] Stampa CONTO ▶️', ord?.id || '(nessun ordine)');
-    // TODO: invoca la tua API stampa conto se già disponibile
+    const active = this.previewActive();
+    if (!active) return;
+    console.log('🧾 [TablesList] print bill from preview order', active.id);
+    // TODO: integrazione /api/orders/:id/print (conto)
   }
 
-  printComandaFromPreview(center: 'pizzeria'|'cucina') {
-    const ord = this.previewActive();
-    console.log(`🍕 [TablesList] COMANDA ▶️ ${center.toUpperCase()}`, ord?.id || '(nessun ordine)');
-    // TODO: invoca la tua API comanda con centro di produzione
+  printComandaFromPreview(center: 'pizzeria' | 'cucina') {
+    const active = this.previewActive();
+    if (!active) return;
+    console.log(
+      '🍕 [TablesList] print comanda from preview order',
+      active.id,
+      '→',
+      center,
+    );
+    // TODO: integrazione /api/orders/:id/print-comanda?center=...
   }
 
-  // === Util =========================================================
-  trackByTableId = (_: number, t: TableCard) => t.id;
-
-  private todayISO(): string {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  // === Util per template ============================================
+  trackByTableId(_: number, t: TableCard) {
+    return t.id;
   }
 
   formatMMSS(sec?: number) {
-    const s = Math.max(0, Number(sec || 0));
-    const m = Math.floor(s/60);
-    const r = s % 60;
-    return `${String(m).padStart(1,'0')}:${String(r).padStart(2,'0')}`;
+    if (!sec || sec <= 0) return '00:00';
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   }
 }
 
-// ===== Utils ========================================================
-function groupBy<T>(arr: T[], key: (x:T)=>number): Map<number, T[]> {
-  const m = new Map<number, T[]>(); for (const it of arr || []) { const k = key(it); const list = m.get(k) || []; list.push(it); m.set(k, list); } return m;
+// === Helpers puri (fuori classe) ====================================
+
+function groupBy<T, K extends number | string>(
+  list: T[],
+  key: (x: T) => K,
+): Map<K, T[]> {
+  const m = new Map<K, T[]>();
+  for (const item of list || []) {
+    const k = key(item);
+    const prev = m.get(k);
+    if (prev) prev.push(item);
+    else m.set(k, [item]);
+  }
+  return m;
 }
 
 // ⚠️ non considerare occupante una prenotazione già chiusa (checkout_at)
-function pickNowAndNext(res: Reservation[], dayISO: string, now: Date | null): [Reservation|undefined, Reservation|undefined] {
-  const inDay = res.filter(r => (r.start_at || '').startsWith(dayISO)); if (!inDay.length) return [undefined, undefined];
-  inDay.sort((a,b) => String(a.start_at).localeCompare(String(b.start_at)));
-  const candidates = inDay.filter(r => !r.checkout_at);
+function pickNowAndNext(
+  res: Reservation[],
+  dayISO: string,
+  now: Date | null,
+): [Reservation | undefined, Reservation | undefined] {
+  const inDay = res.filter((r) => (r.start_at || '').startsWith(dayISO));
+  if (!inDay.length) return [undefined, undefined];
+  inDay.sort((a, b) => String(a.start_at).localeCompare(String(b.start_at)));
+  const candidates = inDay.filter((r) => !(r as any).checkout_at);
   if (!now) return [undefined, candidates[0]];
-  const nowMs = now.getTime(); let cur: Reservation|undefined; let next: Reservation|undefined;
+  const nowMs = now.getTime();
+  let cur: Reservation | undefined;
+  let next: Reservation | undefined;
   for (const r of candidates) {
     const s = new Date(r.start_at!).getTime();
-    const e = new Date(r.end_at || r.start_at!).getTime();
+    const e = new Date((r as any).end_at || r.start_at!).getTime();
     if (nowMs >= s && nowMs < e) cur = r;
     if (!next && s > nowMs) next = r;
   }
-  return [cur, cur ? next : (next || undefined)];
+  return [cur, cur ? next : next || undefined];
 }
 
 // “fine effettiva”: checkout_at se presente, altrimenti end_at/start_at
-function lastEndTodayBefore(res: Reservation[], dayISO: string, now: Date): Date | null {
-  const inDay = res.filter(r => ((r.end_at || r.start_at || '').startsWith(dayISO)));
-  const ends = inDay.map(r => new Date((r as any).checkout_at || r.end_at || r.start_at));
-  const before = ends.filter(d => d.getTime() < now.getTime());
+function lastEndTodayBefore(
+  res: Reservation[],
+  dayISO: string,
+  now: Date,
+): Date | null {
+  const inDay = res.filter((r) =>
+    ((r as any).end_at || r.start_at || '').startsWith(dayISO),
+  );
+  const ends = inDay.map(
+    (r) => new Date((r as any).checkout_at || (r as any).end_at || r.start_at),
+  );
+  const before = ends.filter((d) => d.getTime() < now.getTime());
   if (!before.length) return null;
-  before.sort((a,b)=>b.getTime()-a.getTime());
+  before.sort((a, b) => b.getTime() - a.getTime());
   return before[0];
 }
 
@@ -620,25 +886,42 @@ function findCheckedIn(res: Reservation[]): Reservation | null {
   // ultimo con checkin_at senza checkout_at → occupa il tavolo
   let out: Reservation | null = null;
   for (const r of res) {
-    if (r?.checkin_at && !r?.checkout_at) out = r;
+    if ((r as any)?.checkin_at && !(r as any)?.checkout_at) out = r;
   }
   return out;
 }
+
 function decorateRes(r: any) {
-  return { id: r.id, start_at: r.start_at, end_at: r.end_at,
-    customer_name: r.customer_fullname || r.customer_name || `${r.customer_first || ''} ${r.customer_last || ''}`.trim(),
-    covers: Number(r.party_size || r.covers || 0), kids: Number(r.kids || 0) || undefined,
-    notes: r.notes || undefined, has_kid_products: !!r.has_kid_products,
-    checkin_at: r.checkin_at || null, checkout_at: r.checkout_at || null };
-}
-function decorateResNext(r: any) {
-  return { id: r.id, start_at: r.start_at, end_at: r.end_at,
-    customer_name: r.customer_fullname || r.customer_name || `${r.customer_first || ''} ${r.customer_last || ''}`.trim(),
+  return {
+    id: r.id,
+    start_at: r.start_at,
+    end_at: r.end_at,
+    customer_name:
+      r.customer_fullname ||
+      r.customer_name ||
+      `${r.customer_first || ''} ${r.customer_last || ''}`.trim(),
     covers: Number(r.party_size || r.covers || 0),
-    checkin_at: r.checkin_at || null, checkout_at: r.checkout_at || null };
+    kids: Number(r.kids || 0) || undefined,
+    notes: r.notes || undefined,
+    has_kid_products: !!r.has_kid_products,
+    checkin_at: r.checkin_at || null,
+    checkout_at: r.checkout_at || null,
+  };
 }
 
-function toNum(x: any, df = 0) { const n = Number(x); return Number.isFinite(n) ? n : df; }
+function decorateResNext(r: any) {
+  return {
+    id: r.id,
+    start_at: r.start_at,
+    end_at: r.end_at,
+    customer_name:
+      r.customer_fullname ||
+      r.customer_name ||
+      `${r.customer_first || ''} ${r.customer_last || ''}`.trim(),
+    covers: Number(r.party_size || r.covers || 0),
+    checkin_at: r.checkin_at || null,
+    checkout_at: r.checkout_at || null,
+  };
+}
 
-// 👉 default export per compat con import lazy nel router
 export default TablesListPage;
